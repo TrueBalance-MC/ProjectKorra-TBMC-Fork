@@ -1,5 +1,7 @@
 # Fork Overview:
 This fork is for the TrueBalance MC Minecraft Server. This Build of Project Korra runs on the experimental WIP branch and Re-adds the old ParticleEffect class to allow old addons to stay compatible, switches the entire plugin to the Paper/Adventure API, makes some changes to improve plugin performance where applicable, and adds in some features built for the TBMC Server (for example: the colored fire).
+
+This version of Project Korra is not intended for use on servers other than TBMC and WILL throw errors. Use it at your own risk.
 # Original README:
 
 ![Core Icon](http://i.imgur.com/8XB8XHF.png)
