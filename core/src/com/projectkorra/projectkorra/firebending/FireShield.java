@@ -20,6 +20,8 @@ import com.projectkorra.projectkorra.firebending.util.FireDamageTimer;
 
 public class FireShield extends FireAbility {
 
+	private static final Vector[] SHIELD_LIGHT_AXES = { new Vector(1, 0, 0), new Vector(-1, 0, 0), new Vector(0, 1, 0), new Vector(0, -1, 0), new Vector(0, 0, 1), new Vector(0, 0, -1) };
+
 	private boolean shield;
 	@Attribute("IgniteEntities")
 	private boolean ignite;
@@ -118,13 +120,20 @@ public class FireShield extends FireAbility {
 		if (this.shield) {
 			this.location = this.player.getEyeLocation().clone();
 
+			// Light the shield from its centre and the six points where it crosses each axis, rather than from
+			// every particle position (up to 162 lights every tick)
+			final double lightRadius = this.shieldRadius / 1.5;
+			emitFirebendingLight(this.location);
+			for (final Vector axis : SHIELD_LIGHT_AXES) {
+				emitFirebendingLight(this.location.clone().add(axis.clone().multiply(lightRadius)));
+			}
+
 			for (double theta = 0; theta < 180; theta += this.increment) {
 				for (double phi = 0; phi < 360; phi += this.increment) {
 					final double rphi = Math.toRadians(phi);
 					final double rtheta = Math.toRadians(theta);
 
 					final Location display = this.location.clone().add(this.shieldRadius / 1.5 * Math.cos(rphi) * Math.sin(rtheta), this.shieldRadius / 1.5 * Math.cos(rtheta), this.shieldRadius / 1.5 * Math.sin(rphi) * Math.sin(rtheta));
-					emitFirebendingLight(display);
 
 					if (this.random.nextInt(4) == 0) {
 						playFirebendingParticles(display, 1, 0.1, 0.1, 0.1);
@@ -168,7 +177,7 @@ public class FireShield extends FireAbility {
 				final Location display = this.location.add(vector);
 
 				playFirebendingParticles(display, 2, 0.3, 0.2, 0.3);
-				emitFirebendingLight(display);
+				//The disc is lit by the light at its centre, so the ring doesn't add one per particle
 
 				if (this.random.nextInt(4) == 0) {
 					playFirebendingSound(display);

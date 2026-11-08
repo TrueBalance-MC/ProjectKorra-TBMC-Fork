@@ -176,7 +176,7 @@ public class Tremorsense extends EarthAbility {
 		//A replacement for the canBendIgnoreBindsCooldowns. Since this is used a passive, it should not turn off when bending is toggled.
 		if (!this.bPlayer.canBind(this) || this.bPlayer.isChiBlocked() || this.bPlayer.isParalyzed()
 				|| this.bPlayer.isBloodbent() || this.bPlayer.isControlledByMetalClips()
-				|| getConfig().getStringList("Properties.DisabledWorlds").contains(player.getLocation().getWorld().getName())) {
+				|| BendingPlayer.isWorldDisabled(this.player.getWorld())) {
 			this.remove();
 		} else if (this.player.getLocation().getBlock().getLightLevel() > this.lightThreshold) {
 			this.remove();
@@ -186,7 +186,13 @@ public class Tremorsense extends EarthAbility {
 	}
 
 	public static void manage(final Server server) {
+		// This runs every tick for every player. The constructor never starts in bright light, so skip building an
+		// instance (with its permission and region checks) when it would do nothing.
+		final int lightThreshold = getConfig().getInt("Abilities.Earth.Tremorsense.LightThreshold");
 		for (final Player player : server.getOnlinePlayers()) {
+			if (player.getLocation().getBlock().getLightLevel() >= (byte) lightThreshold) {
+				continue;
+			}
 
 			if (canTremorSense(player) && !hasAbility(player, Tremorsense.class)) {
 				new Tremorsense(player, false);

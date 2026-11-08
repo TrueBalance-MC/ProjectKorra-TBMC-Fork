@@ -133,7 +133,7 @@ public class IceBlast extends IceAbility {
 			return;
 		}
 
-		for (final IceBlast ice : getAbilities(IceBlast.class)) {
+		for (final IceBlast ice : getAbilities(player, IceBlast.class)) {
 			if (ice.prepared) {
 				ice.throwIce();
 			}

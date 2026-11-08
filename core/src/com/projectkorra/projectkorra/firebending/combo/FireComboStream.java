@@ -55,6 +55,9 @@ public class FireComboStream extends BukkitRunnable {
 	private final Vector direction;
 	private final Location initialLocation;
 	private final Location location;
+	/** Combos like FireSpin fire dozens of streams at once, so only every fourth stream gives off light */
+	private static int lightCounter;
+	private final boolean emitsLight = lightCounter++ % 4 == 0;
 
 	public FireComboStream(final Player player, final CoreAbility coreAbility, final Vector direction, final Location location, final double distance, final double speed) {
 		this.useNewParticles = false;
@@ -104,7 +107,7 @@ public class FireComboStream extends BukkitRunnable {
 			}
 		}
 
-		if (this.coreAbility.getElement() == Element.FIRE) {
+		if (this.coreAbility.getElement() == Element.FIRE && this.emitsLight) {
 			emitFirebendingLight(this.location);
 		}
 

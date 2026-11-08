@@ -102,6 +102,7 @@ public class RaiseEarthWall extends EarthAbility {
 						shouldAddCooldown = true;
 						RaiseEarth raiseEarth = new RaiseEarth(this.player, block.getLocation(), this.height);
 						raiseEarth.setNoiseReduction(this.width / 2);
+						break; // One column per position
 					} else if (!this.isTransparent(block)) {
 						break;
 					}
@@ -113,6 +114,7 @@ public class RaiseEarthWall extends EarthAbility {
 						shouldAddCooldown = true;
 						RaiseEarth raiseEarth = new RaiseEarth(this.player, block.getRelative(BlockFace.DOWN).getLocation(), this.height);
 						raiseEarth.setNoiseReduction(this.width / 2);
+						break; // One column per position
 					} else if (!this.isEarthbendable(block)) {
 						break;
 					}

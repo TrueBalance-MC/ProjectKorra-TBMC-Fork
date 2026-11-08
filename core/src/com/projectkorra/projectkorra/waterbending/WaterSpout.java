@@ -1,6 +1,8 @@
 package com.projectkorra.projectkorra.waterbending;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -11,6 +13,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffectType;
 
@@ -110,7 +113,7 @@ public class WaterSpout extends WaterAbility {
 		this.bPlayer.addCooldown(this);
 	}
 
-	private void displayWaterSpiral(final Location location) {
+	private void displayWaterSpiral(final Location location, final Map<Block, BlockData> wanted) {
 		if (!this.useBlockSpiral) {
 			return;
 		}
@@ -131,19 +134,14 @@ public class WaterSpout extends WaterAbility {
 			loc.add(x, height, z);
 
 			final Block block = loc.getBlock();
-			if ((!TempBlock.isTempBlock(block)) && (ElementalAbility.isAir(block.getType()) || !GeneralMethods.isSolid(block))) {
-				this.blocks.add(new TempBlock(block, GeneralMethods.getWaterData(7)));
-				AFFECTED_BLOCKS.put(block, block);
+			if (this.isFree(block) && !wanted.containsKey(block) && (ElementalAbility.isAir(block.getType()) || !GeneralMethods.isSolid(block))) {
+				wanted.put(block, GeneralMethods.getWaterData(7));
 			}
 		}
 	}
 
 	@Override
 	public void progress() {
-		for (final TempBlock tb : this.blocks) {
-			AFFECTED_BLOCKS.remove(tb.getBlock());
-			tb.revertBlock();
-		}
 		if (this.player.isDead() || !this.player.isOnline() || !this.bPlayer.canBendIgnoreBindsCooldowns(this)) {
 			this.remove();
 			return;
@@ -152,7 +150,6 @@ public class WaterSpout extends WaterAbility {
 			this.remove();
 			return;
 		} else {
-			this.blocks.clear();
 			this.player.setFallDistance(0);
 			this.player.setSprinting(false);
 			if ((new Random()).nextInt(10) == 0) {
@@ -173,18 +170,21 @@ public class WaterSpout extends WaterAbility {
 					this.remove();
 					return;
 				}
+				// The blocks the spout should be made of this tick. Blocks it already has are kept and only the
+				// differences are changed, rather than rebuilding the whole spout every tick.
+				final Map<Block, BlockData> wanted = new LinkedHashMap<>();
 				for (int i = 1; i <= height; i++) {
 
 					block = location.clone().add(0, i, 0).getBlock();
 
-					if (!TempBlock.isTempBlock(block)) {
-						this.blocks.add(new TempBlock(block, Material.WATER));
-						AFFECTED_BLOCKS.put(block, block);
+					if (this.isFree(block)) {
+						wanted.put(block, Material.WATER.createBlockData());
 					}
 					this.rotateParticles(block);
 				}
 
-				this.displayWaterSpiral(location.clone().add(.5, 0, .5));
+				this.displayWaterSpiral(location.clone().add(.5, 0, .5), wanted);
+				this.updateBlocks(wanted);
 				if (this.player.getLocation().getBlockY() > block.getY()) {
 					if (this.player.isFlying()) {
 						this.player.setFlying(false);
@@ -203,6 +203,43 @@ public class WaterSpout extends WaterAbility {
 		}
 	}
 
+	/**
+	 * @return True if the spout can use this block: it isn't a TempBlock, or it is one of the spout's own blocks
+	 */
+	private boolean isFree(final Block block) {
+		final TempBlock tempBlock = TempBlock.get(block);
+		return tempBlock == null || this.blocks.contains(tempBlock);
+	}
+
+	/**
+	 * Changes the spout's blocks to the wanted ones, keeping blocks it already has
+	 */
+	private void updateBlocks(final Map<Block, BlockData> wanted) {
+		final Map<Block, TempBlock> owned = new HashMap<>();
+		for (final TempBlock tb : this.blocks) {
+			owned.put(tb.getBlock(), tb);
+		}
+		final List<TempBlock> next = new ArrayList<>();
+		for (final Map.Entry<Block, BlockData> entry : wanted.entrySet()) {
+			final TempBlock tb = owned.remove(entry.getKey());
+			if (tb != null && !tb.isReverted()) {
+				if (!tb.getBlockData().equals(entry.getValue())) {
+					tb.setType(entry.getValue());
+				}
+				next.add(tb);
+			} else {
+				next.add(new TempBlock(entry.getKey(), entry.getValue()));
+				AFFECTED_BLOCKS.put(entry.getKey(), entry.getKey());
+			}
+		}
+		for (final TempBlock tb : owned.values()) {
+			AFFECTED_BLOCKS.remove(tb.getBlock());
+			tb.revertBlock();
+		}
+		this.blocks.clear();
+		this.blocks.addAll(next);
+	}
+
 	@Override
 	public void remove() {
 		super.remove();
@@ -211,6 +248,7 @@ public class WaterSpout extends WaterAbility {
 			AFFECTED_BLOCKS.remove(tb.getBlock());
 			tb.revertBlock();
 		}
+		this.blocks.clear();
 		this.flightHandler.removeInstance(this.player, this.getName());
 	}
 

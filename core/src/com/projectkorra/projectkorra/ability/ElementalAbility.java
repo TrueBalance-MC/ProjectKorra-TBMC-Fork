@@ -1,7 +1,6 @@
 package com.projectkorra.projectkorra.ability;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
@@ -270,17 +269,16 @@ public abstract class ElementalAbility extends CoreAbility {
 	}
 
 	public static boolean isTransparent(final Player player, final String abilityName, final Block block) {
-		return Arrays.asList(getTransparentMaterials()).contains(block.getType()) && !RegionProtection.isRegionProtected(player, block.getLocation(), CoreAbility.getAbility(abilityName));
+		return TRANSPARENT.contains(block.getType()) && !RegionProtection.isRegionProtected(player, block.getLocation(), CoreAbility.getAbility(abilityName));
 	}
 
 	public static boolean isWater(final Block block) {
-		if (block == null) {
+		if (block == null || !isWater(block.getBlockData())) {
 			return false;
-		} else if (block.getState() instanceof Container) {
-			return false;
-		} else {
-			return isWater(block.getBlockData());
 		}
+		// Taking a block state snapshot is expensive, so only check for containers (e.g. waterlogged chests) once
+		// the block is otherwise water
+		return !(block.getState() instanceof Container);
 	}
 
 	public static boolean isWater(final BlockData data) {

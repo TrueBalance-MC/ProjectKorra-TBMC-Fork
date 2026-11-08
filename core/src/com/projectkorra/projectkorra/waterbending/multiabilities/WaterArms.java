@@ -364,9 +364,18 @@ public class WaterArms extends WaterAbility {
 	}
 
 	private static void progressRevert(final boolean ignoreTime) {
+		// Reverting spear ice where an arm currently is would also revert the arm, making it invisible for a tick.
+		// Those blocks are left until the arm has moved on.
+		final Set<Block> armBlocks = new HashSet<>();
+		if (!ignoreTime) {
+			for (final WaterArms waterArms : getAbilities(WaterArms.class)) {
+				armBlocks.addAll(waterArms.right);
+				armBlocks.addAll(waterArms.left);
+			}
+		}
 		for (final Block block : WaterArmsSpear.getIceBlocks().keySet()) {
 			final long time = WaterArmsSpear.getIceBlocks().get(block);
-			if (System.currentTimeMillis() > time || ignoreTime) {
+			if ((System.currentTimeMillis() > time && !armBlocks.contains(block)) || ignoreTime) {
 				if (TempBlock.isTempBlock(block)) {
 					TempBlock.revertBlock(block, Material.AIR);
 				}
@@ -426,17 +435,8 @@ public class WaterArms extends WaterAbility {
 	}
 
 	public static void progressAllCleanup() {
+		// progressRevert skips blocks the arms are on, so the arms (drawn in progress()) don't need drawing again here
 		progressRevert(false);
-		/*
-		 * There is currently a bug where waterArms will display the arms and
-		 * then progressRevert will revert the same blocks in the same tick
-		 * before the user is able to see them, thus causing invisible arms.
-		 * Simple fix is just to display the arms again.
-		 */
-		for (final WaterArms waterArms : getAbilities(WaterArms.class)) {
-			waterArms.displayLeftArm();
-			waterArms.displayRightArm();
-		}
 		WaterArmsWhip.progressAllCleanup();
 	}
 

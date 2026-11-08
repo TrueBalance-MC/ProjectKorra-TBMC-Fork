@@ -1,7 +1,10 @@
 package com.projectkorra.projectkorra.waterbending;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.projectkorra.projectkorra.attribute.markers.DayNightFactor;
 import org.bukkit.Location;
@@ -14,6 +17,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import com.projectkorra.projectkorra.GeneralMethods;
@@ -71,6 +75,14 @@ public class OctopusForm extends WaterAbility {
 	private ArrayList<TempBlock> blocks;
 	private ArrayList<TempBlock> newBlocks;
 	private PhaseChange pc;
+	/**
+	 * Whether this OctopusForm created its PhaseChange. A PhaseChange the player started themselves is never removed by OctopusForm.
+	 */
+	private boolean ownsPhaseChange;
+	/**
+	 * The delayed removal of a PhaseChange an OctopusForm created, by player, so a new OctopusForm can take it over
+	 */
+	private static final Map<UUID, BukkitTask> PHASE_CHANGE_REMOVALS = new ConcurrentHashMap<>();
 
 	public OctopusForm(final Player player) {
 		super(player);
@@ -112,10 +124,17 @@ public class OctopusForm extends WaterAbility {
 		this.currentFormHeight = 0;
 		this.blocks = new ArrayList<TempBlock>();
 		this.newBlocks = new ArrayList<TempBlock>();
+		final BukkitTask pendingRemoval = PHASE_CHANGE_REMOVALS.remove(player.getUniqueId());
+		if (pendingRemoval != null) {
+			// A previous OctopusForm's PhaseChange is waiting to be removed; take it over instead
+			pendingRemoval.cancel();
+		}
 		if (hasAbility(player, PhaseChange.class)) {
 			this.pc = getAbility(player, PhaseChange.class);
+			this.ownsPhaseChange = pendingRemoval != null;
 		} else {
 			this.pc = new PhaseChange(player, PhaseChangeType.CUSTOM);
+			this.ownsPhaseChange = true;
 		}
 
 		this.time = System.currentTimeMillis();
@@ -129,6 +148,9 @@ public class OctopusForm extends WaterAbility {
 			this.sourceLocation = this.sourceBlock.getLocation();
 			this.sourceSelected = true;
 			this.start();
+		} else if (this.ownsPhaseChange && this.pc.getFrozenBlocks().isEmpty()) {
+			// Nothing was formed, so don't leave the PhaseChange we created running
+			this.pc.remove();
 		}
 	}
 
@@ -188,7 +210,9 @@ public class OctopusForm extends WaterAbility {
 			return;
 		}
 		this.bPlayer.addCooldown("OctopusAttack", this.usageCooldown);
-		final double tentacleAngle = (new Vector(1, 0, 0)).angle(this.player.getEyeLocation().getDirection()) + this.angleIncrement / 2;
+		// Same angle (in degrees, from the flattened eye direction) the tentacles are drawn with, so attacks line up with them
+		final Vector eyeDir = this.player.getEyeLocation().getDirection().setY(0);
+		final double tentacleAngle = Math.toDegrees((new Vector(1, 0, 0)).angle(eyeDir)) + this.angleIncrement / 2;
 
 		for (double tangle = tentacleAngle; tangle < tentacleAngle + 360; tangle += this.angleIncrement) {
 			final double phi = Math.toRadians(tangle);
@@ -478,14 +502,19 @@ public class OctopusForm extends WaterAbility {
 		for (final TempBlock block : this.blocks) {
 			block.revertBlock();
 		}
-		new BukkitRunnable() {
+		if (this.ownsPhaseChange) {
+			final UUID uuid = this.player.getUniqueId();
+			final PhaseChange phaseChange = this.pc;
+			PHASE_CHANGE_REMOVALS.put(uuid, new BukkitRunnable() {
 
-			@Override
-			public void run() {
-				OctopusForm.this.pc.remove();
-			}
+				@Override
+				public void run() {
+					PHASE_CHANGE_REMOVALS.remove(uuid);
+					phaseChange.remove();
+				}
 
-		}.runTaskLater(ProjectKorra.plugin, 1000);
+			}.runTaskLater(ProjectKorra.plugin, 1000));
+		}
 	}
 
 	private void returnWater() {
@@ -574,6 +603,24 @@ public class OctopusForm extends WaterAbility {
 
 	public void setSelectRange(final double selectRange) {
 		this.selectRange = selectRange;
+	}
+
+	/**
+	 * Kept for addons compiled against ProjectKorra 1.11 and older, where the select range was called range
+	 * @deprecated Use {@link #getSelectRange()}
+	 */
+	@Deprecated
+	public double getRange() {
+		return this.getSelectRange();
+	}
+
+	/**
+	 * Kept for addons compiled against ProjectKorra 1.11 and older, where the select range was called range
+	 * @deprecated Use {@link #setSelectRange(double)}
+	 */
+	@Deprecated
+	public void setRange(final double range) {
+		this.setSelectRange(range);
 	}
 
 	public double getDamage() {

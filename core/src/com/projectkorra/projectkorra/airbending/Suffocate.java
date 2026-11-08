@@ -1,7 +1,9 @@
 package com.projectkorra.projectkorra.airbending;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.bukkit.*;
 import org.bukkit.entity.ArmorStand;
@@ -61,6 +63,8 @@ public class Suffocate extends AirAbility {
 	private double animationSpeed;
 	private Suffocate ability;
 	private ArrayList<BukkitRunnable> tasks;
+	/** The damage, slow and blind tasks of each target, so they stop when that target escapes */
+	private final Map<LivingEntity, List<BukkitRunnable>> targetTasks = new HashMap<>();
 	private ArrayList<LivingEntity> targets;
 
 	public Suffocate(final Player player) {
@@ -208,6 +212,7 @@ public class Suffocate extends AirAbility {
 				this.tasks.add(br1);
 				this.tasks.add(br2);
 				this.tasks.add(br3);
+				this.targetTasks.put(target, List.of(br1, br2, br3));
 				br1.runTaskTimer(ProjectKorra.plugin, (long) (this.damageDelay * 20), (long) (this.damageRepeat * 20));
 				br2.runTaskTimer(ProjectKorra.plugin, (long) (this.slowDelay * 20), (long) (this.slowRepeat * 20 / 0.25));
 				br3.runTaskTimer(ProjectKorra.plugin, (long) (this.blindDelay * 20), (long) (this.blindRepeat * 20));
@@ -323,6 +328,13 @@ public class Suffocate extends AirAbility {
 		if (this.targets.contains(entity)) {
 			this.targets.remove(entity);
 		}
+		final List<BukkitRunnable> escaped = this.targetTasks.remove(entity);
+		if (escaped != null) {
+			for (final BukkitRunnable task : escaped) {
+				task.cancel();
+				this.tasks.remove(task);
+			}
+		}
 	}
 
 	/** Removes this instance of the ability **/
@@ -330,11 +342,11 @@ public class Suffocate extends AirAbility {
 	public void remove() {
 		super.remove();
 		this.bPlayer.addCooldown(this);
-		for (int i = 0; i < this.tasks.size(); i++) {
-			this.tasks.get(i).cancel();
-			this.tasks.remove(i);
-			i--;
+		for (final BukkitRunnable task : this.tasks) {
+			task.cancel();
 		}
+		this.tasks.clear();
+		this.targetTasks.clear();
 	}
 
 	/**
@@ -457,6 +469,7 @@ public class Suffocate extends AirAbility {
 
 			if (this.i == this.totalSteps + 1) {
 				this.cancel();
+				Suffocate.this.tasks.remove(this); // Finished spirals don't need cancelling later
 			}
 			this.i++;
 		}

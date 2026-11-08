@@ -76,8 +76,19 @@ public class AcrobatStance extends ChiAbility implements StanceAbility {
 		this.bPlayer.addCooldown(this);
 		this.bPlayer.setStance(null);
 		this.player.playSound(this.player.getLocation(), Sound.ENTITY_ENDER_DRAGON_SHOOT, 0.5F, 2F);
-		this.player.removePotionEffect(PotionEffectType.SPEED);
-		this.player.removePotionEffect(PotionEffectType.JUMP_BOOST);
+		this.removeStanceEffect(PotionEffectType.SPEED, this.speed);
+		this.removeStanceEffect(PotionEffectType.JUMP_BOOST, this.jump);
+	}
+
+	/**
+	 * Removes an effect only if it is the short ambient one this stance applies, so the player's own potions and
+	 * beacon effects are left alone
+	 */
+	private void removeStanceEffect(final PotionEffectType type, final int amplifier) {
+		final PotionEffect effect = this.player.getPotionEffect(type);
+		if (effect != null && effect.isAmbient() && effect.getAmplifier() == amplifier && effect.getDuration() <= 10) {
+			this.player.removePotionEffect(type);
+		}
 	}
 
 	@Override

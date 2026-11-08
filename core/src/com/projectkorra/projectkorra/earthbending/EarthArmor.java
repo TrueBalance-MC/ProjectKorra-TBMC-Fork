@@ -1,7 +1,6 @@
 package com.projectkorra.projectkorra.earthbending;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import com.projectkorra.projectkorra.region.RegionProtection;
@@ -16,6 +15,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
+import com.projectkorra.projectkorra.BendingPlayer;
 import com.projectkorra.projectkorra.GeneralMethods;
 import com.projectkorra.projectkorra.ProjectKorra;
 import com.projectkorra.projectkorra.ability.EarthAbility;
@@ -78,6 +78,11 @@ public class EarthArmor extends EarthAbility {
 			final Block oldHeadBlock = this.headBlock;
 			final Block oldLegsBlock = this.legsBlock;
 
+			// Check before moving, otherwise the moved blocks are left behind with nothing to revert them
+			if ((TempBlock.isTempBlock(oldHeadBlock) && !isBendableEarthTempBlock(oldHeadBlock))
+					|| (TempBlock.isTempBlock(oldLegsBlock) && !isBendableEarthTempBlock(oldLegsBlock))) {
+				return;
+			}
 			if (!this.moveBlocks()) {
 				return;
 			}
@@ -285,10 +290,16 @@ public class EarthArmor extends EarthAbility {
 			this.armor.revert();
 		}
 
-		this.player.removePotionEffect(PotionEffectType.ABSORPTION);
+		if (this.formed) {
+			// Only take away the absorption EarthArmor gave (ambient, practically infinite), not a golden apple's
+			final PotionEffect absorption = this.player.getPotionEffect(PotionEffectType.ABSORPTION);
+			if (absorption != null && absorption.isAmbient() && (absorption.isInfinite() || absorption.getDuration() > 72000)) {
+				this.player.removePotionEffect(PotionEffectType.ABSORPTION);
+			}
 
-		if (this.oldAbsorbtion != null) {
-			this.player.addPotionEffect(this.oldAbsorbtion);
+			if (this.oldAbsorbtion != null) {
+				this.player.addPotionEffect(this.oldAbsorbtion);
+			}
 		}
 
 	}
@@ -594,7 +605,6 @@ public class EarthArmor extends EarthAbility {
 
 	private boolean canBend() {
 
-		final List<String> disabledWorlds = getConfig().getStringList("Properties.DisabledWorlds");
 		final Location playerLoc = this.player.getLocation();
 
 		if (!this.player.isOnline() || this.player.isDead()) {
@@ -606,7 +616,7 @@ public class EarthArmor extends EarthAbility {
 			return false;
 		} else if (this.getPlayer() != null && this.getLocation() != null && !this.getLocation().getWorld().equals(this.player.getWorld())) {
 			return false;
-		} else if (disabledWorlds != null && disabledWorlds.contains(this.player.getWorld().getName())) {
+		} else if (BendingPlayer.isWorldDisabled(this.player.getWorld())) {
 			return false;
 		} else if (Commands.isToggledForAll || !this.bPlayer.isToggled() || !this.bPlayer.isElementToggled(this.getElement())) {
 			return false;

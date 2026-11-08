@@ -360,7 +360,7 @@ public class AirBreath extends AirAbility {
     }
 
     private void hardenLavaBlock(Block block) {
-        if (block.getType() != Material.LAVA) return;
+        if (block.getType() != Material.LAVA || RegionProtection.isRegionProtected(this, block.getLocation())) return;
 
         if (block.getBlockData() instanceof Levelled levelled && levelled.getLevel() == 0) {
             new TempBlock(block, Material.OBSIDIAN.createBlockData(), tempBlockRevertTime, this);
@@ -376,7 +376,7 @@ public class AirBreath extends AirAbility {
         if (isInvalidEffectLocation(center)) return;
 
         forEachBlockInRadius(center, getConeRadius(distance), block -> {
-            if (isFireBlock(block)) {
+            if (isFireBlock(block) && !RegionProtection.isRegionProtected(this, block.getLocation())) {
                 new TempBlock(block, Material.AIR.createBlockData(), tempBlockRevertTime, this);
             }
         });

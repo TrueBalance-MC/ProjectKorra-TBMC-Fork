@@ -6,6 +6,8 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.projectkorra.projectkorra.attribute.markers.DayNightFactor;
+import com.projectkorra.projectkorra.ProjectKorra;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -179,6 +181,9 @@ public class FireBlastCharged extends FireAbility {
 
 				this.explosion.setYield((float) yield);
 				EXPLOSIONS.put(this.explosion, this);
+				//The TNT explodes on the next tick; forget it once its damage events have fired
+				final Entity explosion = this.explosion;
+				Bukkit.getScheduler().runTaskLater(ProjectKorra.plugin, () -> EXPLOSIONS.remove(explosion), 20);
 			} else {
 				final List<Entity> entities = GeneralMethods.getEntitiesAroundPoint(this.location, this.damageRadius);
 				for (final Entity entity : entities) {
@@ -240,7 +245,7 @@ public class FireBlastCharged extends FireAbility {
 
 	private void ignite(final Location location) {
 		for (final Block block : GeneralMethods.getBlocksAroundPoint(location, this.collisionRadius)) {
-			if (isIgnitable(block)) {
+			if (isIgnitable(block) && !GeneralMethods.isRegionProtectedFromBuild(this, block.getLocation())) {
 				createTempFire(block.getLocation());
 			}
 		}

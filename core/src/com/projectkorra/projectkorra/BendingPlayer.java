@@ -912,16 +912,14 @@ public class BendingPlayer extends OfflineBendingPlayer {
 			}
 		}
 
-		Map<Element, Long> newSubs = new HashMap<>();
+		final Map<SubElement, Long> newSubs = new HashMap<>();
 
 		for (Element tempElement : this.tempElements.keySet()) {
 			if (tempElement instanceof SubElement) continue; //Ignore subelements, we are only fixing the parent elements' subs
 			long expireTime = this.tempElements.get(tempElement);
 
-			if (expireTime < System.currentTimeMillis()) { //If it still hasn't expired
-				long currentSubs = this.tempElements.keySet().stream()
-						.filter(SubElement.class::isInstance)
-						.map(SubElement.class::cast)
+			if (expireTime > System.currentTimeMillis()) { //If it still hasn't expired
+				long currentSubs = this.tempSubElements.keySet().stream()
 						.filter(sub -> sub.childOf(tempElement))
 						.count();
 
@@ -934,7 +932,6 @@ public class BendingPlayer extends OfflineBendingPlayer {
 						for (SubElement sub : Element.getSubElements(element)) {
 							if (this.hasSubElementPermission(sub) && !this.getSubElements().contains(sub)) {
 								newSubs.put(sub, -1L); //Set the expiry to -1 to indicate that the time is linked to the parent element
-								save = true;
 							}
 						}
 					}
@@ -945,15 +942,17 @@ public class BendingPlayer extends OfflineBendingPlayer {
 				for (SubElement sub : Element.getSubElements(tempElement)) {
 					if (this.hasSubElementPermission(sub) && !this.hasSubElement(sub)) {
 						newSubs.put(sub, -1L); //Set the expiry to -1 to indicate that the time is linked to the parent element
-						save = true;
 					}
 				}
 			}
 		}
 
 		if (save) {
-			this.tempElements.putAll(newSubs); //Adds the new temp subs that should be assigned
 			this.saveSubElements();
+		}
+		if (!newSubs.isEmpty()) {
+			this.tempSubElements.putAll(newSubs); //Adds the new temp subs that should be assigned
+			this.saveTempElements();
 		}
 	}
 }

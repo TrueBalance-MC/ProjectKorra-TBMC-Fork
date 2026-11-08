@@ -19,6 +19,12 @@ import com.projectkorra.projectkorra.command.Commands;
 public class Smokescreen extends ChiAbility {
 
 	private static final Map<Integer, Smokescreen> SNOWBALLS = new ConcurrentHashMap<>();
+	/**
+	 * When each snowball was thrown. Snowballs that never hit anything (e.g. lost in the void) are forgotten after
+	 * {@link #SNOWBALL_LIFETIME} so SNOWBALLS doesn't grow forever.
+	 */
+	private static final Map<Integer, Long> SNOWBALL_TIMES = new ConcurrentHashMap<>();
+	private static final long SNOWBALL_LIFETIME = 60_000;
 	private static final Map<String, Long> BLINDED_TIMES = new ConcurrentHashMap<>();
 	private static final Map<String, Smokescreen> BLINDED_TO_ABILITY = new ConcurrentHashMap<>();
 
@@ -42,7 +48,17 @@ public class Smokescreen extends ChiAbility {
 
 	@Override
 	public void progress() {
-		SNOWBALLS.put(this.player.launchProjectile(Snowball.class).getEntityId(), this);
+		final long now = System.currentTimeMillis();
+		SNOWBALL_TIMES.entrySet().removeIf(entry -> {
+			final boolean expired = now - entry.getValue() > SNOWBALL_LIFETIME || !SNOWBALLS.containsKey(entry.getKey());
+			if (expired) {
+				SNOWBALLS.remove(entry.getKey());
+			}
+			return expired;
+		});
+		final int id = this.player.launchProjectile(Snowball.class).getEntityId();
+		SNOWBALLS.put(id, this);
+		SNOWBALL_TIMES.put(id, now);
 		this.bPlayer.addCooldown(this);
 		this.remove();
 	}
@@ -87,7 +103,8 @@ public class Smokescreen extends ChiAbility {
 			final Player p = (Player) entity;
 			if (BLINDED_TIMES.containsKey(p.getName())) {
 				final Smokescreen smokescreen = BLINDED_TO_ABILITY.get(p.getName());
-				if (BLINDED_TIMES.get(p.getName()) + smokescreen.duration >= System.currentTimeMillis()) {
+				// duration is in seconds; clear the record once the blindness has worn off
+				if (BLINDED_TIMES.get(p.getName()) + smokescreen.duration * 1000L < System.currentTimeMillis()) {
 					BLINDED_TIMES.remove(p.getName());
 					BLINDED_TO_ABILITY.remove(p.getName());
 				}

@@ -55,7 +55,7 @@ public class Tornado extends AirAbility {
 		this.radius = getConfig().getDouble("Abilities.Air.Tornado.Radius");
 		this.npcPushFactor = getConfig().getDouble("Abilities.Air.Tornado.NpcPushFactor");
 		this.speed = getConfig().getDouble("Abilities.Air.Tornado.Speed");
-		this.numberOfStreams = (int) (.3 * this.maxHeight);
+		this.numberOfStreams = Math.max(1, (int) (.3 * this.maxHeight)); // A Height below 4 would otherwise give 0 streams and divide by zero
 		this.currentHeight = 2;
 		this.currentRadius = this.currentHeight / this.maxHeight * this.radius;
 		this.random = new Random();
@@ -66,7 +66,7 @@ public class Tornado extends AirAbility {
 		}
 
 		int angle = 0;
-		for (int i = 0; i <= this.maxHeight; i += (int) this.maxHeight / this.numberOfStreams) {
+		for (int i = 0; i <= this.maxHeight; i += Math.max(1, (int) this.maxHeight / this.numberOfStreams)) {
 			this.angles.put(i, angle);
 			angle += 90;
 			if (angle == 360) {

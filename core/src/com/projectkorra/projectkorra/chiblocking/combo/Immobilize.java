@@ -10,6 +10,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
+import com.projectkorra.projectkorra.BendingPlayer;
 import com.projectkorra.projectkorra.Element;
 import com.projectkorra.projectkorra.GeneralMethods;
 import com.projectkorra.projectkorra.ability.ChiAbility;
@@ -44,12 +45,23 @@ public class Immobilize extends ChiAbility implements ComboAbility {
 		} else {
 			if (RegionProtection.isRegionProtected(this, this.target.getLocation()) ||
 					((this.target instanceof Player) && Commands.invincible.contains(((Player) this.target).getName())) ||
-					!this.bPlayer.canBeChiblocked()) {
+					!canBeChiblocked(this.target)) {
 				return;
 			}
 			paralyze(this.target, this.duration);
 			this.bPlayer.addCooldown(this);
 		}
+	}
+
+	/**
+	 * Whether the target can be chiblocked. Entities without bending data (mobs, NPCs) always can.
+	 */
+	private static boolean canBeChiblocked(final Entity target) {
+		if (target instanceof Player targetPlayer) {
+			final BendingPlayer targetBPlayer = BendingPlayer.getBendingPlayer(targetPlayer);
+			return targetBPlayer == null || targetBPlayer.canBeChiblocked();
+		}
+		return true;
 	}
 
 	/**
@@ -61,7 +73,7 @@ public class Immobilize extends ChiAbility implements ComboAbility {
 	 */
 	private static void paralyze(final Entity target, final Long duration) {
 		final MovementHandler mh = new MovementHandler((LivingEntity) target, CoreAbility.getAbility(Immobilize.class));
-		mh.stopWithDuration(duration / 1000 * 20, Element.CHI.getColor() + "* Immobilized *");
+		mh.stopWithDuration(duration / 50, Element.CHI.getColor() + "* Immobilized *");
 	}
 
 	@Override

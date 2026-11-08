@@ -1,5 +1,7 @@
 package com.projectkorra.projectkorra.firebending;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -121,10 +123,28 @@ public class Illumination extends FireAbility {
 		this.revert();
 	}
 
+	/**
+	 * Players who could have the block's chunk loaded. Block changes sent to anyone further away are ignored by
+	 * their client anyway.
+	 */
+	private static List<Player> getViewers(final Block block) {
+		final double range = (block.getWorld().getViewDistance() + 1) * 16;
+		final double rangeSquared = range * range;
+		final List<Player> viewers = new ArrayList<>();
+		for (final Player player : block.getWorld().getPlayers()) {
+			final double dx = player.getLocation().getX() - block.getX();
+			final double dz = player.getLocation().getZ() - block.getZ();
+			if (dx * dx + dz * dz <= rangeSquared) {
+				viewers.add(player);
+			}
+		}
+		return viewers;
+	}
+
 	private void revert() {
 		if (this.block != null) {
 			BLOCKS.remove(this.block);
-			this.block.getWorld().getPlayers().forEach(p -> p.sendBlockChange(this.block.getLocation(), this.block.getBlockData()));
+			getViewers(this.block).forEach(p -> p.sendBlockChange(this.block.getLocation(), this.block.getBlockData()));
 		}
 	}
 
@@ -157,11 +177,11 @@ public class Illumination extends FireAbility {
 			}
 
 			this.block = eyeBlock;
-			this.block.getWorld().getPlayers().forEach(p -> p.sendBlockChange(this.block.getLocation(), clonedData));
+			getViewers(this.block).forEach(p -> p.sendBlockChange(this.block.getLocation(), clonedData));
 		} else if (getCurrentTick() % 10 == 0) { //Update to all players in the area every half a second anyway
 			//We have to set the block back to the actual one because if they couldn't render the initial block change,
 			//(due to it not being in render distance) then no further packets will modify the block either.
-			this.block.getWorld().getPlayers().forEach(p -> {
+			getViewers(this.block).forEach(p -> {
 				p.sendBlockChange(this.block.getLocation(), this.block.getBlockData());
 				p.sendBlockChange(this.block.getLocation(), clonedData);
 			});

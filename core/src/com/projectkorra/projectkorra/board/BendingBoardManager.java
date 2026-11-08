@@ -1,6 +1,5 @@
 package com.projectkorra.projectkorra.board;
 
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collections;
@@ -218,10 +217,9 @@ public final class BendingBoardManager {
 	 * Load into memory the list of players who have toggled the bending board off.
 	 */
 	public static void loadDisabledPlayers() {
-		Bukkit.getScheduler().runTaskAsynchronously(ProjectKorra.plugin, () -> {
+		DBConnection.sql.runAsync(() -> {
 			Set<UUID> disabled = new HashSet<>();
-			try {
-				final ResultSet rs = DBConnection.sql.readQuery("SELECT uuid FROM pk_board WHERE enabled = 0");
+			try (ResultSet rs = DBConnection.sql.readQuery("SELECT uuid FROM pk_board WHERE enabled = 0")) {
 				while (rs.next()) disabled.add(UUID.fromString(rs.getString("uuid")));
 			} catch (SQLException e) {
 				e.printStackTrace();
@@ -239,19 +237,14 @@ public final class BendingBoardManager {
 	public static void clean(final Player player) {
 		scoreboardPlayers.remove(player);
 		final UUID uuid = player.getUniqueId();
-		final String updateQuery = "UPDATE pk_board SET enabled = " + (disabledPlayers.contains(uuid) ? 0 : 1) + " WHERE uuid = ?";
-		Bukkit.getScheduler().runTaskAsynchronously(ProjectKorra.plugin, () -> {
-			try {
-				PreparedStatement ps = DBConnection.sql.getConnection().prepareStatement("SELECT enabled FROM pk_board WHERE uuid = ? LIMIT 1");
-				ps.setString(1, uuid.toString());
-				PreparedStatement ps2;
-				if (!ps.executeQuery().next()) { // if the entry doesn't exist in the DB, create it.
-					ps2 = DBConnection.sql.getConnection().prepareStatement("INSERT INTO pk_board (uuid, enabled) VALUES (?, 1)");
+		final int enabled = disabledPlayers.contains(uuid) ? 0 : 1;
+		DBConnection.sql.runAsync(() -> {
+			try (ResultSet rs = DBConnection.sql.readQuery("SELECT enabled FROM pk_board WHERE uuid = ? LIMIT 1", uuid.toString())) {
+				if (!rs.next()) { // if the entry doesn't exist in the DB, create it.
+					DBConnection.sql.modifyQuerySync("INSERT INTO pk_board (uuid, enabled) VALUES (?, ?)", uuid.toString(), enabled);
 				} else { // if the entry exists in the DB, update it
-					ps2 = DBConnection.sql.getConnection().prepareStatement(updateQuery);
+					DBConnection.sql.modifyQuerySync("UPDATE pk_board SET enabled = ? WHERE uuid = ?", enabled, uuid.toString());
 				}
-				ps2.setString(1, uuid.toString());
-				ps2.execute();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}

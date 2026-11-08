@@ -1,5 +1,6 @@
 package com.projectkorra.projectkorra.util;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -54,7 +55,7 @@ public class MovementHandler {
 				@Override
 				public void run() {
 					ChatUtil.sendActionBar(message, player);
-					if (System.currentTimeMillis() >= start + duration / 20 * 1000) {
+					if (System.currentTimeMillis() >= start + duration * 50) { //duration is in ticks, 50ms each
 						MovementHandler.this.reset();
 					}
 				}
@@ -74,7 +75,10 @@ public class MovementHandler {
 
 				@Override
 				public void run() {
-					if (MovementHandler.this.entity.isOnGround()) {
+					if (!MovementHandler.this.entity.isValid()) { //Died or despawned before landing
+						this.cancel();
+						MovementHandler.this.reset();
+					} else if (MovementHandler.this.entity.isOnGround()) {
 						MovementHandler.this.entity.setAI(false);
 						this.cancel();
 						MovementHandler.this.runnable.runTaskLater(ProjectKorra.plugin, duration);
@@ -110,7 +114,10 @@ public class MovementHandler {
 
 				@Override
 				public void run() {
-					if (MovementHandler.this.entity.isOnGround()) {
+					if (!MovementHandler.this.entity.isValid()) { //Died or despawned before landing
+						this.cancel();
+						MovementHandler.this.reset();
+					} else if (MovementHandler.this.entity.isOnGround()) {
 						MovementHandler.this.entity.setAI(false);
 						this.cancel();
 					}
@@ -144,6 +151,7 @@ public class MovementHandler {
 		if (this.entity.hasMetadata("movement:stop")) {
 			this.entity.removeMetadata("movement:stop", ProjectKorra.plugin);
 		}
+		handlers.remove(this);
 	}
 
 	public CoreAbility getAbility() {
@@ -183,7 +191,7 @@ public class MovementHandler {
 	 * Resets all instances of MovementHandler
 	 */
 	public static void resetAll() {
-		for (final MovementHandler handler : handlers) {
+		for (final MovementHandler handler : new ArrayList<>(handlers)) { //reset() removes the handler
 			handler.reset();
 		}
 	}

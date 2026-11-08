@@ -172,6 +172,9 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockIgniteEvent;
+import org.bukkit.event.block.BlockBurnEvent;
+import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.block.BlockFormEvent;
 import org.bukkit.event.block.BlockFromToEvent;
@@ -598,7 +601,7 @@ public class PKListener implements Listener {
 			}
 		}
 
-		if (BENDING_ENTITY_DEATH.get(entity) instanceof CoreAbility ability && (ability instanceof FireAbility || FireDamageTimer.isEnflamed(entity))) {
+		if (BENDING_ENTITY_DEATH.remove(entity) instanceof CoreAbility ability && (ability instanceof FireAbility || FireDamageTimer.isEnflamed(entity))) {
 			final List<ItemStack> newDrops = new ArrayList<>();
 			for (ItemStack drop : drops) {
 				newDrops.add(switch(drop.getType()) {
@@ -908,7 +911,7 @@ public class PKListener implements Listener {
 			}
 
 			//Check if AvatarState will save them from death, or if AvatarState should activate due to low health
-			if (AvatarState.activateLowHealth(bPlayer, event.getFinalDamage(), player.getHealth() - event.getFinalDamage() < 0)) {
+			if (bPlayer != null && AvatarState.activateLowHealth(bPlayer, event.getFinalDamage(), player.getHealth() - event.getFinalDamage() < 0)) {
 				event.setDamage(0D);
 				event.setCancelled(true);
 			}
@@ -957,7 +960,8 @@ public class PKListener implements Listener {
 
 		final boolean chi = bPLayer.canCurrentlyBendWithWeapons() && bPLayer.isElementToggled(Element.CHI);
         final CoreAbility ability = bPLayer.getBoundAbility();
-        if (chi && ability instanceof ChiAbility && !bPLayer.isOnCooldown(ability) && bPLayer.canBendPassive(ability)) {
+        // These are active abilities, so they use the normal ability checks (bending.ability.<name>), not the passive ones
+        if (chi && ability instanceof ChiAbility && bPLayer.canBend(ability)) {
 			if (ability instanceof Paralyze) {
 				new Paralyze(sourcePlayer, entity);
 			} else if (ability instanceof QuickStrike) {
@@ -1226,7 +1230,7 @@ public class PKListener implements Listener {
 			if (bPlayer.hasElement(Element.AIR) || bPlayer.hasElement(Element.CHI)) {
 				PassiveHandler.checkExhaustionPassives(player);
 			}
-			if (to.getBlock() != from.getBlock()) {
+			if (to.getBlockX() != from.getBlockX() || to.getBlockY() != from.getBlockY() || to.getBlockZ() != from.getBlockZ()) {
 				FirePassive.handle(player);
 			}
 		}
@@ -1235,9 +1239,9 @@ public class PKListener implements Listener {
 			Material block = from.getBlock().getType();
 			if (block != Material.VINE && block != Material.LADDER) {
 				final int current = player.getStatistic(Statistic.JUMP);
-				final int last = JUMPS.get(player);
+				final Integer last = JUMPS.putIfAbsent(player, current);
 
-				if (last != current) {
+				if (last != null && last != current) {
 					JUMPS.put(player, current);
 					final double yDif = to.getY() - from.getY();
 					if ((yDif < 0.035 || yDif > 0.037) && (yDif < 0.116 || yDif > 0.118)) {
@@ -1738,7 +1742,7 @@ public class PKListener implements Listener {
 	@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
 	public void onInventoryPickupItem(final InventoryPickupItemEvent event) {
 		Item item = event.getItem();
-		if (!BendingPlayer.isWorldDisabled(item.getWorld())) {
+		if (BendingPlayer.isWorldDisabled(item.getWorld())) {
 			return;
 		}
 		for (final MetalClips metalClips : CoreAbility.getAbilities(MetalClips.class)) {
@@ -1747,6 +1751,35 @@ public class PKListener implements Listener {
 				return;
 			}
 		}
+	}
+
+	/**
+	 * Ability fire is placed as real fire blocks. Without these, vanilla fire spread would let it burn and ignite
+	 * the world even when fire griefing is off. Natural fire is not affected.
+	 */
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void onTempFireSpread(final BlockSpreadEvent event) {
+		if (isTempFire(event.getSource())) {
+			event.setCancelled(true);
+		}
+	}
+
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void onTempFireBurn(final BlockBurnEvent event) {
+		if (isTempFire(event.getIgnitingBlock())) {
+			event.setCancelled(true);
+		}
+	}
+
+	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+	public void onTempFireIgnite(final BlockIgniteEvent event) {
+		if (event.getCause() == BlockIgniteEvent.IgniteCause.SPREAD && isTempFire(event.getIgnitingBlock())) {
+			event.setCancelled(true);
+		}
+	}
+
+	private static boolean isTempFire(final Block block) {
+		return block != null && !FireAbility.canFireGrief() && (block.getType() == Material.FIRE || block.getType() == Material.SOUL_FIRE) && TempBlock.isTempBlock(block);
 	}
 
 	@EventHandler

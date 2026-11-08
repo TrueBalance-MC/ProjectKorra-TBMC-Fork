@@ -37,6 +37,9 @@ public class AirScooter extends AirAbility {
 	private ArrayList<Double> angles;
 	private Slime slime;
 	private Boolean useslime;
+	/** The player's own speed effect, taken off while scooting and given back afterwards */
+	private PotionEffect storedSpeed;
+	private long storedSpeedTime;
 
 	private double phi = 0;
 
@@ -199,7 +202,7 @@ public class AirScooter extends AirAbility {
 		}
 
 		this.player.setSprinting(false);
-		this.player.removePotionEffect(PotionEffectType.SPEED);
+		this.removeSpeedEffect();
 		if (this.useslime) {
 			GeneralMethods.setVelocity(this, this.slime, velocity);
 		} else {
@@ -222,6 +225,39 @@ public class AirScooter extends AirAbility {
 		}
 		this.flightHandler.removeInstance(this.player, this.getName());
 		this.bPlayer.addCooldown(this);
+		this.restoreSpeedEffect();
+	}
+
+	/**
+	 * Speed would make the scooter faster, so it is removed while scooting. A long-lasting effect (a potion or
+	 * beacon) is remembered so it can be given back when the scooter ends.
+	 */
+	private void removeSpeedEffect() {
+		final PotionEffect effect = this.player.getPotionEffect(PotionEffectType.SPEED);
+		if (effect == null) {
+			return;
+		}
+		if (effect.isInfinite() || effect.getDuration() > 10) { // Short ambient effects come from abilities and reapply themselves
+			this.storedSpeed = effect;
+			this.storedSpeedTime = System.currentTimeMillis();
+		}
+		this.player.removePotionEffect(PotionEffectType.SPEED);
+	}
+
+	private void restoreSpeedEffect() {
+		if (this.storedSpeed == null || !this.player.isOnline() || this.player.isDead()) {
+			return;
+		}
+		final PotionEffect effect = this.storedSpeed;
+		this.storedSpeed = null;
+		if (effect.isInfinite()) {
+			this.player.addPotionEffect(effect);
+			return;
+		}
+		final int remaining = effect.getDuration() - (int) ((System.currentTimeMillis() - this.storedSpeedTime) / 50);
+		if (remaining > 0) {
+			this.player.addPotionEffect(effect.withDuration(remaining));
+		}
 	}
 
 	/*

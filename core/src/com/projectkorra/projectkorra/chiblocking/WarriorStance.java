@@ -71,8 +71,19 @@ public class WarriorStance extends ChiAbility implements StanceAbility {
 		this.bPlayer.setStance(null);
 		if (this.player != null) {
 			this.player.playSound(this.player.getLocation(), Sound.ENTITY_ENDER_DRAGON_SHOOT, 0.5F, 2F);
-			this.player.removePotionEffect(PotionEffectType.RESISTANCE);
-			this.player.removePotionEffect(PotionEffectType.STRENGTH);
+			this.removeStanceEffect(PotionEffectType.RESISTANCE, this.resistance);
+			this.removeStanceEffect(PotionEffectType.STRENGTH, this.strength);
+		}
+	}
+
+	/**
+	 * Removes an effect only if it is the short ambient one this stance applies, so the player's own potions and
+	 * beacon effects are left alone
+	 */
+	private void removeStanceEffect(final PotionEffectType type, final int amplifier) {
+		final PotionEffect effect = this.player.getPotionEffect(type);
+		if (effect != null && effect.isAmbient() && effect.getAmplifier() == amplifier && effect.getDuration() <= 10) {
+			this.player.removePotionEffect(type);
 		}
 	}
 

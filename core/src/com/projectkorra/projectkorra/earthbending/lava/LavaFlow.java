@@ -396,7 +396,7 @@ public class LavaFlow extends LavaAbility {
 					if (isPlant(above2) && above2.getType().equals(Material.TALL_GRASS)) {
 						final TempBlock tb2 = new TempBlock(above2, Material.AIR);
 						TEMP_AIR_BLOCKS.put(above2, tb2);
-						this.affectedBlocks.add(tb);
+						this.affectedBlocks.add(tb2);
 					}
 				} else {
 					return;
@@ -542,6 +542,10 @@ public class LavaFlow extends LavaAbility {
 			if (TEMP_LAND_BLOCKS.values().contains(tblock)) {
 				this.affectedBlocks.remove(tblock);
 				TEMP_LAND_BLOCKS.remove(tblock.getBlock());
+			}
+			if (TEMP_AIR_BLOCKS.values().contains(tblock)) {
+				this.affectedBlocks.remove(tblock);
+				TEMP_AIR_BLOCKS.remove(tblock.getBlock());
 			}
 		}
 

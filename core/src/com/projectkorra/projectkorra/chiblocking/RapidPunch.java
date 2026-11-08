@@ -21,7 +21,7 @@ public class RapidPunch extends ChiAbility {
 	private long cooldown;
 	private int numPunches;
 	private long interval;
-	private final long last = 0;
+	private long last = 0;
 	private Entity target;
 
 	public RapidPunch(final Player sourceplayer, final Entity targetentity) {
@@ -43,7 +43,7 @@ public class RapidPunch extends ChiAbility {
 
 	@Override
 	public void progress() {
-		if (this.numPunches >= this.punches || this.target == null || !(this.target instanceof LivingEntity)) {
+		if (this.numPunches >= this.punches || this.target == null || !(this.target instanceof LivingEntity) || !this.target.isValid()) {
 			this.remove();
 			return;
 		}
@@ -63,6 +63,7 @@ public class RapidPunch extends ChiAbility {
 
 			lt.setNoDamageTicks(0);
 			this.numPunches++;
+			this.last = System.currentTimeMillis();
 		}
 	}
 

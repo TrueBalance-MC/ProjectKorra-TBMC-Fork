@@ -127,7 +127,10 @@ public class ProjectKorra extends JavaPlugin {
 
 	@Override
 	public void onDisable() {
-		this.revertChecker.cancel();
+		// These are null if the plugin was disabled during startup, e.g. because the database couldn't be opened
+		if (this.revertChecker != null) {
+			this.revertChecker.cancel();
+		}
 		GeneralMethods.stopBending();
 		for (final Player player : this.getServer().getOnlinePlayers()) {
 			if (isStatisticsEnabled()) {
@@ -144,7 +147,9 @@ public class ProjectKorra extends JavaPlugin {
 		}
 
 		if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-			papiHook.unregister();
+			if (papiHook != null) {
+				papiHook.unregister();
+			}
 		}
 	}
 

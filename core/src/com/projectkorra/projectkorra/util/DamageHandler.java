@@ -208,8 +208,14 @@ public class DamageHandler {
 
 			final double prevHealth = lent.getHealth();
 			BEING_DAMAGED.add(lent); //Stops StackOverflows
-			lent.damage(damage, damageSourceBuilder.build());
-			BEING_DAMAGED.remove(lent);
+			try {
+				lent.damage(damage, damageSourceBuilder.build());
+			} finally {
+				BEING_DAMAGED.remove(lent);
+				// The damage event is handled synchronously inside damage(). If it was cancelled or never fired, the
+				// armor callback didn't run, so make sure the entity's next unrelated hit doesn't ignore armor
+				ARMOR_PERCENTAGE_BY_ENTITY_ID.remove(lent.getEntityId());
+			}
 			final double nextHealth = lent.getHealth();
 
 			if (prevHealth != nextHealth) {

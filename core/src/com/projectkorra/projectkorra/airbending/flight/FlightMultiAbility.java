@@ -175,16 +175,8 @@ public class FlightMultiAbility extends FlightAbility implements MultiAbility {
 				this.player.sendMessage(ChatUtil.legacy("&c" + ConfigManager.languageConfig.get().getString("Abilities.Air.Flight.RequestedPlayerNoLongerFound")));
 			} else {
 				if (requestTime.get(this.player.getUniqueId()) + 15000 > System.currentTimeMillis()) {
-					final long start = System.currentTimeMillis();
-					new BukkitRunnable() {
-						@Override
-						public void run() {
-							ChatUtil.sendActionBar(ConfigManager.languageConfig.get().getString("Abilities.Air.Flight.PlayerRequest").replace("{target}", "&f" + FlightMultiAbility.this.player.getName() + "&a"), p2);
-							if (System.currentTimeMillis() >= start + 300) {
-								this.cancel();
-							}
-						}
-					}.runTaskTimer(ProjectKorra.plugin, 0, 1);
+					// progress() runs every tick, so sending here keeps the request shown without starting a task per tick
+					ChatUtil.sendActionBar(ConfigManager.languageConfig.get().getString("Abilities.Air.Flight.PlayerRequest").replace("{target}", "&f" + this.player.getName() + "&a"), p2);
 				} else {
 					requestedMap.remove(this.player.getUniqueId());
 					requestTime.remove(this.player.getUniqueId());
@@ -222,7 +214,7 @@ public class FlightMultiAbility extends FlightAbility implements MultiAbility {
 			this.player.setFlying(false);
 
 			if (this.speed > this.baseSpeed) {
-				if (this.prevDir.angle(this.player.getEyeLocation().getDirection()) > 45 || this.prevDir.angle(this.player.getEyeLocation().getDirection()) < -45) {
+				if (this.prevDir.angle(this.player.getEyeLocation().getDirection()) > Math.toRadians(45)) { // angle() is in radians and never negative
 					this.multiplier = 1;
 				}
 
@@ -233,7 +225,7 @@ public class FlightMultiAbility extends FlightAbility implements MultiAbility {
 						if (!GeneralMethods.isRegionProtectedFromBuild(this.player, e.getLocation())) {
 							final LivingEntity le = (LivingEntity) e;
 							DamageHandler.damageEntity(le, this.speed / 2, this);
-							GeneralMethods.setVelocity(this, le, this.player.getVelocity().clone().multiply(2 / 3));
+							GeneralMethods.setVelocity(this, le, this.player.getVelocity().clone().multiply(2.0 / 3));
 						}
 					}
 				}

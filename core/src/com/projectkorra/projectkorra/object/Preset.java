@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -18,9 +19,9 @@ import java.util.Base64;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import com.projectkorra.projectkorra.BendingPlayer;
 import com.projectkorra.projectkorra.ProjectKorra;
@@ -89,37 +90,38 @@ public class Preset {
 	 * @param player The Player who's Presets should be loaded
 	 */
 	public static void loadPresets(final Player player) {
-		new BukkitRunnable() {
-			@Override
-			public void run() {
-				final UUID uuid = player.getUniqueId();
-				if (uuid == null) {
-					return;
-				}
-				try {
-					final PreparedStatement ps = DBConnection.sql.getConnection().prepareStatement(loadQuery);
-					ps.setString(1, uuid.toString());
-					final ResultSet rs = ps.executeQuery();
-					if (rs.next()) { // Presets exist.
-						int i = 0;
-						do {
-							final HashMap<Integer, String> moves = new HashMap<Integer, String>();
-							for (int total = 1; total <= 9; total++) {
-								final String slot = rs.getString("slot" + total);
-								if (slot != null) {
-									moves.put(total, slot);
-								}
+		final UUID uuid = player.getUniqueId();
+		if (uuid == null) {
+			return;
+		}
+		DBConnection.sql.runAsync(() -> {
+			final Map<String, HashMap<Integer, String>> loaded = new LinkedHashMap<>();
+			try (PreparedStatement ps = DBConnection.sql.getConnection().prepareStatement(loadQuery)) {
+				ps.setString(1, uuid.toString());
+				try (ResultSet rs = ps.executeQuery()) {
+					while (rs.next()) {
+						final HashMap<Integer, String> moves = new HashMap<Integer, String>();
+						for (int total = 1; total <= 9; total++) {
+							final String slot = rs.getString("slot" + total);
+							if (slot != null) {
+								moves.put(total, slot);
 							}
-							new Preset(uuid, rs.getString("name"), moves);
-							i++;
-						} while (rs.next());
-						ProjectKorra.log.info("Loaded " + i + " presets for " + player.getName());
+						}
+						loaded.put(rs.getString("name"), moves);
 					}
-				} catch (final SQLException ex) {
-					ex.printStackTrace();
 				}
+			} catch (final SQLException ex) {
+				ex.printStackTrace();
 			}
-		}.runTaskAsynchronously(ProjectKorra.plugin);
+			if (loaded.isEmpty()) {
+				return;
+			}
+			// Presets register themselves in a map the main thread uses, so create them there
+			Bukkit.getScheduler().runTask(ProjectKorra.plugin, () -> {
+				loaded.forEach((name, moves) -> new Preset(uuid, name, moves));
+				ProjectKorra.log.info("Loaded " + loaded.size() + " presets for " + player.getName());
+			});
+		});
 	}
 
 	/**
@@ -278,22 +280,25 @@ public class Preset {
 	public CompletableFuture<Boolean> delete() {
 		Preset instance = this;
 		CompletableFuture<Boolean> future = new CompletableFuture<>();
-		new BukkitRunnable() {
-			@Override
-			public void run() {
-				try {
-					final PreparedStatement ps = DBConnection.sql.getConnection().prepareStatement(deleteQuery);
-					ps.setString(1, uuid.toString());
-					ps.setString(2, name);
-					ps.execute();
-					presets.get(uuid).remove(instance);
-					future.complete(true);
-				} catch (final SQLException e) {
-					e.printStackTrace();
-					future.complete(false);
-				}
+		DBConnection.sql.runAsync(() -> {
+			boolean deleted;
+			try (PreparedStatement ps = DBConnection.sql.getConnection().prepareStatement(deleteQuery)) {
+				ps.setString(1, uuid.toString());
+				ps.setString(2, name);
+				ps.execute();
+				deleted = true;
+			} catch (final SQLException e) {
+				e.printStackTrace();
+				deleted = false;
 			}
-		}.runTaskAsynchronously(ProjectKorra.plugin);
+			final boolean result = deleted;
+			Bukkit.getScheduler().runTask(ProjectKorra.plugin, () -> {
+				if (result && presets.containsKey(uuid)) {
+					presets.get(uuid).remove(instance);
+				}
+				future.complete(result);
+			});
+		});
 		return future;
 	}
 
@@ -311,24 +316,24 @@ public class Preset {
 	 */
 	public CompletableFuture<Boolean> save(final Player player) {
 		CompletableFuture<Boolean> future = new CompletableFuture<>();
-		new BukkitRunnable() {
-			@Override
-			public void run() {
-				try {
-					PreparedStatement ps = DBConnection.sql.getConnection().prepareStatement(insertQuery);
-					ps.setString(1, uuid.toString());
-					ps.setString(2, name);
-					for (int i = 1; i <= 9; i++) {
-						ps.setString(2 + i, abilities.get(i));
-					}
-					ps.execute();
-					future.complete(true);
-				} catch (final SQLException e) {
-					e.printStackTrace();
-					future.complete(false);
+		final Map<Integer, String> slots = new HashMap<>(abilities);
+		DBConnection.sql.runAsync(() -> {
+			boolean saved;
+			try (PreparedStatement ps = DBConnection.sql.getConnection().prepareStatement(insertQuery)) {
+				ps.setString(1, uuid.toString());
+				ps.setString(2, name);
+				for (int i = 1; i <= 9; i++) {
+					ps.setString(2 + i, slots.get(i));
 				}
+				ps.execute();
+				saved = true;
+			} catch (final SQLException e) {
+				e.printStackTrace();
+				saved = false;
 			}
-		}.runTaskAsynchronously(ProjectKorra.plugin);
+			final boolean result = saved;
+			Bukkit.getScheduler().runTask(ProjectKorra.plugin, () -> future.complete(result));
+		});
 		return future;
 	}
 

@@ -34,9 +34,14 @@ public class RevertChecker implements Runnable {
 
 	public static void revertAirBlocks() {
 		for (final int ID : airRevertQueue.keySet()) {
-			final Block block = EarthAbility.getTempAirLocations().get(ID).getState().getBlock();
-			block.getWorld().getChunkAtAsync(block).thenAccept(result -> EarthAbility.revertAirBlock(ID));
 			RevertChecker.airRevertQueue.remove(ID);
+			// The checker runs async, so this may have been reverted since it was queued
+			final Information info = EarthAbility.getTempAirLocations().get(ID);
+			if (info == null) {
+				continue;
+			}
+			final Block block = info.getState().getBlock();
+			block.getWorld().getChunkAtAsync(block).thenAccept(result -> EarthAbility.revertAirBlock(ID));
 		}
 	}
 

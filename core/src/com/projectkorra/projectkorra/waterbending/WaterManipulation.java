@@ -517,18 +517,19 @@ public class WaterManipulation extends WaterAbility {
 		if (!handledPrepare && WaterReturn.hasWaterBottle(player)) {
 			final Location eyeLoc = player.getEyeLocation();
 			final Block block = eyeLoc.add(eyeLoc.getDirection().normalize()).getBlock();
-			if (!AFFECTED_BLOCKS.containsKey(block)) {
-				AFFECTED_BLOCKS.put(block, block);
-			}
-
 			if (isTransparent(player, block) && isTransparent(player, eyeLoc.getBlock())) {
 				if (getTargetLocation(player, range).distanceSquared(block.getLocation()) > 1) {
+					// Only track the block once a manipulation is actually made from it; entries that are never used
+					// would suppress physics there forever
+					final boolean added = AFFECTED_BLOCKS.putIfAbsent(block, block) == null;
 					final TempBlock tb = new TempBlock(block, WATER);
 
 					final WaterManipulation waterManip = new WaterManipulation(player, block);
 					waterManip.moveWater();
 					if (waterManip.progressing) {
 						WaterReturn.emptyWaterBottle(player);
+					} else if (added) {
+						AFFECTED_BLOCKS.remove(block);
 					}
 					tb.revertBlock();
 				}

@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 import com.projectkorra.projectkorra.GeneralMethods;
+import com.projectkorra.projectkorra.region.RegionProtection;
 import com.projectkorra.projectkorra.ability.ComboAbility;
 import com.projectkorra.projectkorra.ability.ElementalAbility;
 import com.projectkorra.projectkorra.ability.FireAbility;
@@ -101,7 +102,10 @@ public class FireWheel extends FireAbility implements ComboAbility {
 
 		Block topBlock = GeneralMethods.getTopBlock(this.location, (int) this.radius, (int)this.radius + 2);
 		if (topBlock.getType().equals(Material.SNOW)) {
-			topBlock.breakNaturally();
+			// Without fire griefing the wheel rolls over snow instead of destroying it
+			if (canFireGrief() && !RegionProtection.isRegionProtected(this, topBlock.getLocation())) {
+				topBlock.breakNaturally();
+			}
 			topBlock = topBlock.getRelative(BlockFace.DOWN);
 		}
 		if (isWater(topBlock)) {
@@ -110,7 +114,10 @@ public class FireWheel extends FireAbility implements ComboAbility {
 		} else if (topBlock.getType() == Material.FIRE) {
 			topBlock = topBlock.getRelative(BlockFace.DOWN);
 		} else if (ElementalAbility.isPlant(topBlock)) {
-			topBlock.breakNaturally();
+			// Without fire griefing the wheel rolls over plants instead of destroying them
+			if (canFireGrief() && !RegionProtection.isRegionProtected(this, topBlock.getLocation())) {
+				topBlock.breakNaturally();
+			}
 			topBlock = topBlock.getRelative(BlockFace.DOWN);
 		} else if (ElementalAbility.isAir(topBlock.getType())) {
 			this.remove();
@@ -121,13 +128,17 @@ public class FireWheel extends FireAbility implements ComboAbility {
 		}
 		this.location.setY(topBlock.getY() + this.height);
 
+		int point = 0;
 		for (double i = -180; i <= 180; i += 3) {
 			final Location tempLoc = this.location.clone();
 			final Vector newDir = this.direction.clone().multiply(this.radius * Math.cos(Math.toRadians(i)));
 			tempLoc.add(newDir);
 			tempLoc.setY(tempLoc.getY() + (this.radius * Math.sin(Math.toRadians(i))));
 			playFirebendingParticles(tempLoc, 0, 0, 0, 0);
-			emitFirebendingLight(tempLoc);
+			// A light every 60 degrees lights the wheel just as well as one on each of its 121 particles
+			if (point++ % 20 == 0) {
+				emitFirebendingLight(tempLoc);
+			}
 		}
 
 		for (final Entity entity : GeneralMethods.getEntitiesAroundPoint(this.location, this.radius + 0.5)) {

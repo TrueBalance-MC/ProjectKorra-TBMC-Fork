@@ -41,9 +41,11 @@ import com.projectkorra.projectkorra.region.RegionProtection;
 import com.projectkorra.projectkorra.storage.DBConnection;
 import com.projectkorra.projectkorra.util.ChatUtil;
 import com.projectkorra.projectkorra.util.ColoredParticle;
+import com.projectkorra.projectkorra.util.FlightHandler;
 import com.projectkorra.projectkorra.util.LightManager;
 import com.projectkorra.projectkorra.util.MovementHandler;
 import com.projectkorra.projectkorra.util.RevertChecker;
+import com.projectkorra.projectkorra.util.StatisticsManager;
 import com.projectkorra.projectkorra.util.TempArmor;
 import com.projectkorra.projectkorra.util.TempArmorStand;
 import com.projectkorra.projectkorra.util.TempBlock;
@@ -997,8 +999,10 @@ public class GeneralMethods {
 		int sources = 0;
 		for (final BlockFace face : GeneralMethods.ADJACENT_SIDES) {
 			final Block relative = block.getRelative(face);
-			if (lava && (relative.getType() != Material.LAVA || !EarthPassive.canPhysicsChange(relative))) {
-				continue;
+			if (lava) {
+				if (relative.getType() != Material.LAVA || !EarthPassive.canPhysicsChange(relative)) {
+					continue;
+				}
 			} else if (!(ElementalAbility.isWater(relative) || ElementalAbility.isIce(relative)) || !WaterManipulation.canPhysicsChange(relative)) {
 				continue;
 			}
@@ -1152,6 +1156,10 @@ public class GeneralMethods {
 		plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new ChiblockingManager(plugin), 0, 1);
 		plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new BendingManager.TempElementsRunnable(), 20, 20);
 		plugin.revertChecker = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, new RevertChecker(plugin), 0, 200);
+		// cancelTasks also stopped these, which were started once on enable
+		RegionProtection.startCleanCacheTask(ConfigManager.getConfig().getDouble("Properties.RegionProtection.CacheBlockTime"));
+		Manager.getManager(FlightHandler.class).startCleanup();
+		Manager.getManager(StatisticsManager.class).startSaveTask();
 
 		EarthTunnel.setupBendableMaterials();
 		Bloodbending.loadBloodlessFromConfig();

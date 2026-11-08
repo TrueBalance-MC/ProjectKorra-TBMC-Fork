@@ -46,6 +46,8 @@ public class Bloodbending extends BloodAbility {
 	private boolean canBloodbendOtherBloodbenders;
 	@Attribute(Attribute.RANGE) @DayNightFactor
 	private double range;
+	/** How far past the range a victim can get before they are released */
+	private static final double RELEASE_MARGIN = 3;
 	@Attribute(Attribute.DURATION) @DayNightFactor
 	private long duration;
 	@Attribute(Attribute.COOLDOWN) @DayNightFactor(invert = true)
@@ -167,10 +169,17 @@ public class Bloodbending extends BloodAbility {
 	private void launch() {
 		final Location location = this.player.getLocation();
 		for (final Entity entity : TARGETED_ENTITIES.keySet()) {
+			// Only launch this bender's own victims
+			if (TARGETED_ENTITIES.get(entity) != this.player) {
+				continue;
+			}
 			final Location target = entity.getLocation().clone();
 			Vector vector = new Vector(0, 0, 0);
 			if (location.getWorld().equals(target.getWorld())) {
 				vector = GeneralMethods.getDirection(location, GeneralMethods.getTargetedLocation(this.player, location.distance(target)));
+			}
+			if (vector.lengthSquared() == 0) {
+				continue; // Normalizing a zero vector gives NaN velocity
 			}
 			vector.normalize();
 			GeneralMethods.setVelocity(this, entity, vector.multiply(this.knockback));
@@ -259,12 +268,20 @@ public class Bloodbending extends BloodAbility {
 			}
 		} else {
 			for (final Entity entity : TARGETED_ENTITIES.keySet()) {
+				// Other bloodbenders validate their own victims
+				if (TARGETED_ENTITIES.get(entity) != this.player) {
+					continue;
+				}
+				if (!entity.isValid() || entity.isDead()) {
+					TARGETED_ENTITIES.remove(entity);
+					continue;
+				}
 				if (entity instanceof Player) {
 					final BendingPlayer targetBPlayer = BendingPlayer.getBendingPlayer((Player) entity);
 					if (targetBPlayer != null && !targetBPlayer.canBeBloodbent()) {
 						TARGETED_ENTITIES.remove(entity);
 						continue;
-					} else if (targetBPlayer.isAvatarState()) {
+					} else if (targetBPlayer != null && targetBPlayer.isAvatarState()) {
 						TARGETED_ENTITIES.remove(entity);
 						continue;
 					}
@@ -274,6 +291,11 @@ public class Bloodbending extends BloodAbility {
 				if (this.player.getWorld() != newLocation.getWorld()) {
 					TARGETED_ENTITIES.remove(entity);
 					continue;
+				}
+				// Release victims who get out of range (e.g. by teleporting). The margin keeps normal struggling from breaking the hold.
+				final double releaseRange = this.range + RELEASE_MARGIN;
+				if (newLocation.distanceSquared(this.player.getLocation()) > releaseRange * releaseRange) {
+					TARGETED_ENTITIES.remove(entity);
 				}
 			}
 

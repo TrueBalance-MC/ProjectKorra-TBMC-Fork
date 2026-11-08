@@ -38,6 +38,8 @@ public class AirStream extends AirAbility implements ComboAbility {
 	private Vector direction;
 	private ArrayList<Entity> affectedEntities;
 	private ArrayList<BukkitRunnable> tasks;
+	/** How long the stream can fly around without catching anything before it ends */
+	private static final long MAX_IDLE_TIME = 10000;
 
 	public AirStream(final Player player) {
 		super(player);
@@ -95,9 +97,15 @@ public class AirStream extends AirAbility implements ComboAbility {
 			this.destination = GeneralMethods.getTargetedLocation(this.player, this.range, getTransparentMaterials());
 		}
 
-		if (GeneralMethods.locationEqualsIgnoreDirection(this.currentLoc, this.destination)) {
-			this.remove();
-			return;
+		final double distanceSquared = this.currentLoc.getWorld().equals(this.destination.getWorld()) ? this.currentLoc.distanceSquared(this.destination) : Double.MAX_VALUE;
+		if (this.affectedEntities.isEmpty()) {
+			// With nothing caught, the stream ends once it reaches where the player is aiming, or after a while
+			if (distanceSquared <= this.speed * this.speed || System.currentTimeMillis() - this.getStartTime() > MAX_IDLE_TIME) {
+				this.remove();
+				return;
+			}
+		} else if (distanceSquared < 1.0E-6) {
+			return; // Already there, and normalizing a zero vector would give NaN
 		}
 
 		this.direction = GeneralMethods.getDirection(this.currentLoc, this.destination).normalize();
@@ -139,6 +147,7 @@ public class AirStream extends AirAbility implements ComboAbility {
 						final Vector orthog = GeneralMethods.getOrthogonalVector(this.dir.clone(), angle, 0.5);
 						playAirbendingParticles(this.loc.clone().add(orthog), 1, 0F, 0F, 0F);
 					}
+					AirStream.this.tasks.remove(this); // It has run, so it no longer needs cancelling on remove
 				}
 			};
 			br.runTaskLater(ProjectKorra.plugin, i * 2);

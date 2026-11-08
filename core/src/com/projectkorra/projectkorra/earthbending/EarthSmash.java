@@ -97,7 +97,7 @@ public class EarthSmash extends EarthAbility {
 			final EarthSmash flySmash = flyingInSmashCheck(player);
 			if (flySmash != null) {
 				flySmash.state = State.FLYING;
-				flySmash.player = player;
+				flySmash.setPlayer(player);
 				flySmash.setFields();
 				flySmash.flightStartTime = System.currentTimeMillis();
 				return;
@@ -117,7 +117,7 @@ public class EarthSmash extends EarthAbility {
 				if (grabbedSmash.location.getWorld().equals(player.getWorld())) {
 					grabbedSmash.grabbedDistance = grabbedSmash.location.distance(player.getEyeLocation());
 				}
-				grabbedSmash.player = player;
+				grabbedSmash.setPlayer(player);
 				grabbedSmash.setFields();
 				return;
 			}
@@ -137,7 +137,7 @@ public class EarthSmash extends EarthAbility {
 			if (grabbedSmash != null) {
 				player.teleport(grabbedSmash.location.clone().add(0, 2, 0));
 				grabbedSmash.state = State.FLYING;
-				grabbedSmash.player = player;
+				grabbedSmash.setPlayer(player);
 				grabbedSmash.setFields();
 				grabbedSmash.flightStartTime = System.currentTimeMillis();
 			}

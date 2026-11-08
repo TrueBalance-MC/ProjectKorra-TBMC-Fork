@@ -169,7 +169,10 @@ public class AirBlast extends AirAbility {
 
 		final Location origin = ORIGINS.get(player);
 		final BendingPlayer bPlayer = BendingPlayer.getBendingPlayer(player);
-		if (bPlayer == null || player.isDead() || !player.isOnline()) {
+		if (!player.isOnline()) {
+			ORIGINS.remove(player); // Don't keep logged out players in memory
+			return;
+		} else if (bPlayer == null || player.isDead()) {
 			return;
 		} else if (!origin.getWorld().equals(player.getWorld())) {
 			ORIGINS.remove(player);
@@ -448,9 +451,13 @@ public class AirBlast extends AirAbility {
 
 						@Override
 						public void run() {
-							button.setPowered(false);
-							testblock.setBlockData(button);
 							AirBlast.this.affectedLevers.remove(testblock);
+							// Only release the button if it is still there and pressed, so a button broken in the meantime isn't restored
+							if (testblock.getType() != button.getMaterial() || !(testblock.getBlockData() instanceof Switch current) || !current.isPowered()) {
+								return;
+							}
+							current.setPowered(false);
+							testblock.setBlockData(current);
 							testblock.getWorld().playSound(testblock.getLocation(), Sound.BLOCK_WOODEN_BUTTON_CLICK_OFF, 0.5f, 0);
 						}
 

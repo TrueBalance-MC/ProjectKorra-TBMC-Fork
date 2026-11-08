@@ -96,7 +96,7 @@ public class CollisionManager {
 			final double certainNoCollisionDistSquared = Math.pow(this.certainNoCollisionDistance, 2);
 
 			for (final CoreAbility abilityFirst : instancesFirst) {
-				if (abilityFirst.getPlayer() == null || alreadyCollided.contains(abilityFirst) || !abilityFirst.isCollidable()) {
+				if (abilityFirst.isRemoved() || abilityFirst.getPlayer() == null || alreadyCollided.contains(abilityFirst) || !abilityFirst.isCollidable()) {
 					continue;
 				}
 
@@ -109,7 +109,9 @@ public class CollisionManager {
 				}
 
 				for (final CoreAbility abilitySecond : instancesSecond) {
-					if (abilitySecond.getPlayer() == null || alreadyCollided.contains(abilitySecond) || !abilitySecond.isCollidable()) {
+					if (abilityFirst.isRemoved()) {
+						break; //Removed by an earlier collision in this pass
+					} else if (abilitySecond.isRemoved() || abilitySecond.getPlayer() == null || alreadyCollided.contains(abilitySecond) || !abilitySecond.isCollidable()) {
 						continue;
 					} else if (abilityFirst.getPlayer().equals(abilitySecond.getPlayer())) {
 						continue;

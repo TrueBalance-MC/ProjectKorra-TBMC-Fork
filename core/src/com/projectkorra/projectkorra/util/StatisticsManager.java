@@ -49,10 +49,18 @@ public class StatisticsManager extends Manager implements Runnable {
 
 	@Override
 	public void onActivate() {
+		this.startSaveTask();
+		this.setupStatistics();
+	}
+
+	/**
+	 * Starts the task that saves the statistics of players who logged out. Called on activation, and again after
+	 * a reload cancels ProjectKorra's tasks.
+	 */
+	public void startSaveTask() {
 		if (ProjectKorra.isStatisticsEnabled()) {
 			ProjectKorra.plugin.getServer().getScheduler().scheduleSyncRepeatingTask(ProjectKorra.plugin, this, 20 * this.INTERVAL, 20 * this.INTERVAL);
 		}
-		this.setupStatistics();
 	}
 
 	public void setupStatistics() {

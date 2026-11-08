@@ -213,6 +213,9 @@ public class TempArmor {
 	 */
 	public void revert(List<ItemStack> drops, boolean keepInv) {
 		final PriorityQueue<TempArmor> queue = INSTANCES.get(this.entity);
+		if (queue == null) { //Already fully reverted
+			return;
+		}
 
 		if (queue.contains(this)) {
 			final TempArmor head = queue.peek();
@@ -274,9 +277,10 @@ public class TempArmor {
 	 */
 	public static void revertAll() {
 		for (final LivingEntity entity : INSTANCES.keySet()) {
-			while (!INSTANCES.get(entity).isEmpty()) {
-				final TempArmor armor = INSTANCES.get(entity).poll();
-				armor.revert();
+			// Reverting the last armor piece removes the entity's queue from the map
+			PriorityQueue<TempArmor> queue;
+			while ((queue = INSTANCES.get(entity)) != null && !queue.isEmpty()) {
+				queue.poll().revert();
 			}
 		}
 	}

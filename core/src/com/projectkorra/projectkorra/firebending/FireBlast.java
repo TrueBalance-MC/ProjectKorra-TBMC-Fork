@@ -12,6 +12,7 @@ import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.BlastFurnace;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.type.Campfire;
 import org.bukkit.block.Furnace;
 import org.bukkit.block.Smoker;
@@ -134,7 +135,10 @@ public class FireBlast extends FireAbility {
 			playFirebendingParticles(this.location, 6, this.flameRadius, this.flameRadius, this.flameRadius);
 		}
 
-		emitFirebendingLight(this.location);
+		// A FireBurst is hundreds of blasts at once, so only the ones currently showing particles give off light
+		if (!this.isFireBurst || this.showParticles) {
+			emitFirebendingLight(this.location);
+		}
 
 		BlockIterator blocks = new BlockIterator(this.getLocation().getWorld(), this.location.toVector(), this.direction, 0, (int) Math.ceil(this.direction.clone().multiply(speedFactor).length()));
 
@@ -147,13 +151,17 @@ public class FireBlast extends FireAbility {
 		}
 	}
 
+	private static final BlockFace[] SNOW_CHECK_FACES = { BlockFace.SELF, BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST };
+
 	public boolean checkLocation(Block block) {
 		if (block.isLiquid()) {
 			this.remove();
 			return false;
 		}
-		for (Block b : GeneralMethods.getBlocksAroundPoint(block.getLocation(), 1.4)) {
-			if (!isSnow(b)) continue;
+		//Same blocks as getBlocksAroundPoint(location, 1.4): the block itself and its six neighbours (diagonals are further than 1.4)
+		for (final BlockFace face : SNOW_CHECK_FACES) {
+			final Block b = block.getRelative(face);
+			if (!b.getWorld().isChunkLoaded(b.getX() >> 4, b.getZ() >> 4) || !isSnow(b)) continue;
 
 			dryWetBlocks(b, this, ThreadLocalRandom.current().nextInt(4) == 0);
 		}
@@ -170,11 +178,11 @@ public class FireBlast extends FireAbility {
 				final BlastFurnace blastF = (BlastFurnace) block.getState();
 				blastF.setBurnTime((short) 800);
 				blastF.update();
-			} else if (block instanceof Campfire) {
-				final Campfire campfire = (Campfire) block.getBlockData();
-				if(!campfire.isLit()) {
-					if(block.getType() != Material.SOUL_CAMPFIRE || bPlayer.canUseSubElement(SubElement.BLUE_FIRE)) {
+			} else if (block.getBlockData() instanceof Campfire campfire) {
+				if (!campfire.isLit() && !RegionProtection.isRegionProtected(this, block.getLocation())) {
+					if (block.getType() != Material.SOUL_CAMPFIRE || bPlayer.canUseSubElement(SubElement.BLUE_FIRE)) {
 						campfire.setLit(true);
+						block.setBlockData(campfire);
 					}
 				}
 			} else if (isIgnitable(this.location.getBlock())) {
@@ -189,6 +197,26 @@ public class FireBlast extends FireAbility {
 		}
 		return true;
 	}
+	/**
+	 * @return The closest living entity in reach other than the caster, so items or arrows in the way don't let the
+	 * blast pass through a mob
+	 */
+	private LivingEntity getClosestTarget() {
+		LivingEntity closest = null;
+		double closestDistance = Double.MAX_VALUE;
+		for (final Entity entity : GeneralMethods.getEntitiesAroundPoint(this.location, this.collisionRadius)) {
+			if (!(entity instanceof LivingEntity living) || entity.getUniqueId().equals(this.player.getUniqueId())) {
+				continue;
+			}
+			final double distance = this.location.distanceSquared(entity.getLocation());
+			if (distance < closestDistance) {
+				closest = living;
+				closestDistance = distance;
+			}
+		}
+		return closest;
+	}
+
 	private void affect(final Entity entity) {
 		if (entity.getUniqueId() != this.player.getUniqueId() && !RegionProtection.isRegionProtected(this, entity.getLocation()) && !((entity instanceof Player) && Commands.invincible.contains(((Player) entity).getName()))) {
 			if (this.bPlayer.isAvatarState()) {
@@ -240,7 +268,7 @@ public class FireBlast extends FireAbility {
 			return;
 		}
 
-		Entity entity = GeneralMethods.getClosestEntity(this.location, this.collisionRadius);
+		final Entity entity = this.getClosestTarget();
 		if (entity != null) {
 			this.affect(entity);
 		}

@@ -76,7 +76,7 @@ public class TempBlock {
 	
 	public TempBlock(final Block block, final BlockData newData, final long revertTime, final CoreAbility ability) {
 		this(block, newData, revertTime);
-		this.ability = Optional.of(ability);
+		this.setAbility(ability);
 	}
 	
 	public TempBlock(final Block block, final BlockData newData, final CoreAbility ability) {
@@ -87,7 +87,7 @@ public class TempBlock {
 		this.block = block;
 		this.newData = newData;
 		this.attachedTempBlocks = new HashSet<>(0);
-		this.suffocate = ability.isPresent() ? !(ability.get() instanceof WaterAbility) : false;
+		this.suffocate = false; //No ability yet; setAbility decides whether it suffocates
 
 		if (block.getType() == Material.SNOW){
 			if (newData.getMaterial() == Material.AIR){
@@ -301,11 +301,19 @@ public class TempBlock {
 		if (revertTime <= 0 || state instanceof Container) {
 			return;
 		}
-		this.revertTime = revertTime + System.currentTimeMillis();
-		if (!this.inRevertQueue) {
-			this.inRevertQueue = true;
-			REVERT_QUEUE.add(this);
+		if (this.inRevertQueue) {
+			// The queue is ordered by revert time, so take this out before changing the time and add it back after
+			REVERT_QUEUE.remove(this);
 		}
+		this.revertTime = revertTime + System.currentTimeMillis();
+		this.inRevertQueue = true;
+		REVERT_QUEUE.add(this);
+	}
+
+	private static Void logRevertError(final Throwable throwable) {
+		ProjectKorra.log.severe("Failed to revert a TempBlock");
+		throwable.printStackTrace();
+		return null;
 	}
 
 	/**
@@ -334,11 +342,15 @@ public class TempBlock {
 		this.reverted = true;
 		if (instances_.containsKey(this.block)) {
 			this.block.getWorld().getChunkAtAsync(this.block).thenAccept(result -> {
-				TempBlock last = instances_.get(this.block).getLast();
-				this.block.setBlockData(last.newData); //Set the block to the next in line TempBlock
-			});
+				// If the chunk had to load, the other TempBlocks here may have reverted in the meantime. The last
+				// of them sets the original state back itself.
+				final LinkedList<TempBlock> remaining = instances_.get(this.block);
+				if (remaining != null && !remaining.isEmpty()) {
+					this.block.setBlockData(remaining.getLast().newData); //Set the block to the next in line TempBlock
+				}
+			}).exceptionally(TempBlock::logRevertError);
 		} else { //Set to the original blockstate
-			this.block.getWorld().getChunkAtAsync(this.block).thenAccept(result -> revertState());
+			this.block.getWorld().getChunkAtAsync(this.block).thenAccept(result -> revertState()).exceptionally(TempBlock::logRevertError);
 		}
 
 		if (removeFromQueue) { //Remove from the queue if it's in there. We only do this when required because it is an intensive action due to the collection type
@@ -455,6 +467,7 @@ public class TempBlock {
 
 	public TempBlock setAbility(CoreAbility ability) {
 		this.ability = Optional.of(ability);
+		this.suffocate = !(ability instanceof WaterAbility); //Blocks from non-water abilities suffocate entities inside them
 		return this;
 	}
 

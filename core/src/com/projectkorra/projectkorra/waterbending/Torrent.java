@@ -2,9 +2,11 @@ package com.projectkorra.projectkorra.waterbending;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.projectkorra.projectkorra.attribute.markers.DayNightFactor;
@@ -24,6 +26,7 @@ import org.bukkit.util.Vector;
 import com.projectkorra.projectkorra.BendingPlayer;
 import com.projectkorra.projectkorra.GeneralMethods;
 import com.projectkorra.projectkorra.ability.AirAbility;
+import com.projectkorra.projectkorra.ability.CoreAbility;
 import com.projectkorra.projectkorra.ability.WaterAbility;
 import com.projectkorra.projectkorra.attribute.Attribute;
 import com.projectkorra.projectkorra.avatar.AvatarState;
@@ -186,6 +189,14 @@ public class Torrent extends WaterAbility {
 
 			if (this.sourceSelected) {
 				if (this.sourceBlock.getLocation().getWorld() != this.player.getWorld()) {
+					this.remove();
+					return;
+				}
+
+				// The source may have been replaced since it was selected (e.g. a chest placed there). Using it anyway
+				// would delete whatever replaced it.
+				final Material sourceType = this.sourceBlock.getType();
+				if (!isAir(sourceType) && !isWaterbendable(sourceType) && !isTransformableBlock(sourceType) && !isWater(this.sourceBlock)) {
 					this.remove();
 					return;
 				}
@@ -378,7 +389,8 @@ public class Torrent extends WaterAbility {
 			}
 		}
 
-		final Entity target = GeneralMethods.getTargetedEntity(this.player, this.range, this.hurtEntities);
+		// getTargetedEntity adds the player to the list it's given, so pass a copy or hurtEntities grows every tick
+		final Entity target = GeneralMethods.getTargetedEntity(this.player, this.range, new ArrayList<>(this.hurtEntities));
 		Location targetLoc = this.player.getTargetBlock(getTransparentMaterialSet(), (int) this.range).getLocation();
 		if (target != null) {
 			targetLoc = target.getLocation();
@@ -480,11 +492,16 @@ public class Torrent extends WaterAbility {
 	}
 
 	private void formRing() {
-		this.clearRing();
+		// Keep ring blocks that are still in the ring instead of reverting and recreating the whole ring
+		final Map<Block, TempBlock> owned = new HashMap<>();
+		for (final TempBlock tb : this.blocks) {
+			owned.put(tb.getBlock(), tb);
+		}
+		final List<TempBlock> next = new ArrayList<>();
 		this.startAngle += 30;
 
 		final Location loc = this.player.getEyeLocation();
-		final ArrayList<Block> doneBlocks = new ArrayList<Block>();
+		final Set<Block> doneBlocks = new HashSet<>();
 		final ArrayList<Entity> affectedEntities = new ArrayList<Entity>();
 		final List<Entity> entities = GeneralMethods.getEntitiesAroundPoint(loc, this.radius + 2);
 
@@ -496,8 +513,10 @@ public class Torrent extends WaterAbility {
 			final Location blockLoc = loc.clone().add(dx, dy, dz);
 			final Block block = blockLoc.getBlock();
 			if (!doneBlocks.contains(block)) {
-				if (isTransparent(this.player, block)) {
-					this.blocks.add(new TempBlock(block, Material.WATER));
+				final TempBlock own = owned.get(block);
+				final boolean isOwn = own != null && !own.isReverted() && TempBlock.get(block) == own;
+				if (isOwn || isTransparent(this.player, block)) {
+					next.add(isOwn ? owned.remove(block) : new TempBlock(block, Material.WATER));
 					doneBlocks.add(block);
 					for (final Entity entity : entities) {
 						if (entity.getWorld() != blockLoc.getWorld()) {
@@ -510,6 +529,11 @@ public class Torrent extends WaterAbility {
 				}
 			}
 		}
+		for (final TempBlock tb : owned.values()) {
+			tb.revertBlock();
+		}
+		this.blocks.clear();
+		this.blocks.addAll(next);
 	}
 
 	private void clearRing() {
@@ -598,7 +622,7 @@ public class Torrent extends WaterAbility {
 			velocity.setZ(AvatarState.getValue(vec.getZ()));
 		} else {
 			velocity.setX(vec.getX());
-			velocity.setZ(vec.getY());
+			velocity.setZ(vec.getZ());
 		}
 
 		GeneralMethods.setVelocity(this, entity, velocity);
@@ -640,6 +664,9 @@ public class Torrent extends WaterAbility {
 	}
 
 	public static void progressAllCleanup() {
+		// canBend runs bend hooks and a region check, so do it once per player instead of once per frozen block
+		final Map<Player, Boolean> canBend = new HashMap<>();
+		final CoreAbility torrent = getAbility("Torrent");
 		for (final TempBlock block : FROZEN_BLOCKS.keySet()) {
 			final Player player = FROZEN_BLOCKS.get(block).getLeft();
 			final BendingPlayer bPlayer = BendingPlayer.getBendingPlayer(player);
@@ -655,7 +682,7 @@ public class Torrent extends WaterAbility {
 			} else if (block.getBlock().getWorld() != player.getWorld()) {
 				thaw(block);
 				continue;
-			} else if (block.getLocation().distanceSquared(player.getLocation()) > CLEANUP_RANGE * CLEANUP_RANGE || !bPlayer.canBendIgnoreBindsCooldowns(getAbility("Torrent"))) {
+			} else if (block.getLocation().distanceSquared(player.getLocation()) > CLEANUP_RANGE * CLEANUP_RANGE || !canBend.computeIfAbsent(player, p -> bPlayer.canBendIgnoreBindsCooldowns(torrent))) {
 				thaw(block);
 			}
 		}

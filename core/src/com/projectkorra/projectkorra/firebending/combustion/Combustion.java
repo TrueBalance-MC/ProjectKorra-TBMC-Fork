@@ -149,13 +149,17 @@ public class Combustion extends CombustionAbility {
 		if (block != null) {
 			if (!ElementalAbility.isAir(block.getType()) && !isWater(block)) {
 				this.createExplosion(block.getLocation(), this.explosivePower, this.breakBlocks);
+				return;
 			}
 		}
 
-		for (final Entity entity : this.location.getWorld().getEntities()) {
+		//Only entities within 2 blocks can match below, so query that box instead of every entity in the world
+		for (final Entity entity : this.location.getWorld().getNearbyEntities(this.location, 2, 2, 2)) {
 			if (entity instanceof LivingEntity) {
 				if (entity.getLocation().distanceSquared(this.location) <= 4 && !entity.equals(this.player)) {
+					//One explosion per combustion, even when several entities are in reach
 					this.createExplosion(this.location, this.explosivePower, this.breakBlocks);
+					return;
 				}
 			}
 		}

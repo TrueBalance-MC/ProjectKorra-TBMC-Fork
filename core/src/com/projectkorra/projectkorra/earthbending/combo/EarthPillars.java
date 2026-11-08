@@ -73,7 +73,10 @@ public class EarthPillars extends EarthAbility implements ComboAbility {
 
 	public void affect(final LivingEntity lent) {
 		final RaiseEarth re = new RaiseEarth(this.player, lent.getLocation().clone().subtract(0, 1, 0), 3);
-		this.entities.put(re, lent);
+		// A pillar that didn't start (protected or unbendable block) never finishes, which kept this ability alive forever
+		if (re.isStarted()) {
+			this.entities.put(re, lent);
+		}
 	}
 
 	@Override

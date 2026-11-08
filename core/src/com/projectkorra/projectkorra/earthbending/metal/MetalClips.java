@@ -287,6 +287,9 @@ public class MetalClips extends MetalAbility {
 					final ItemStack[] armor = targetPlayer.getInventory().getArmorContents();
 
 					for (final ItemStack is : armor) {
+						if (is == null) { // Empty armor slots
+							continue;
+						}
 						if (Arrays.asList(METAL_ITEMS).contains(is.getType())) {
 							targetPlayer.getWorld().dropItem(targetPlayer.getLocation(), is);
 							is.setType(Material.AIR);
@@ -424,7 +427,10 @@ public class MetalClips extends MetalAbility {
 								TARGET_TO_ABILITY.put(this.targetEntity, this);
 								this.formArmor();
 							} else {
-								TARGET_TO_ABILITY.get(this.targetEntity).remove();
+								final MetalClips owner = TARGET_TO_ABILITY.get(this.targetEntity);
+								if (owner != null) {
+									owner.remove();
+								}
 							}
 						}
 					} else {

@@ -206,6 +206,8 @@ public abstract class Database {
 					}
 				}
 			}
+			// Close the statement together with the ResultSet, so callers closing the ResultSet don't leak it
+			stmt.closeOnCompletion();
 			final ResultSet rs = stmt.executeQuery();
 
 			return rs;
@@ -227,9 +229,9 @@ public abstract class Database {
 				this.open();
 			}
 			final DatabaseMetaData dmd = this.connection.getMetaData();
-			final ResultSet rs = dmd.getTables(null, null, table, null);
-
-			return rs.next();
+			try (ResultSet rs = dmd.getTables(null, null, table, null)) {
+				return rs.next();
+			}
 		} catch (final Exception e) {
 			e.printStackTrace();
 			return false;
@@ -249,8 +251,9 @@ public abstract class Database {
 				this.open();
 			}
 			final DatabaseMetaData dmd = this.connection.getMetaData();
-			final ResultSet rs = dmd.getColumns(null, null, table, column);
-			return rs.next();
+			try (ResultSet rs = dmd.getColumns(null, null, table, column)) {
+				return rs.next();
+			}
 		} catch (final Exception e) {
 			e.printStackTrace();
 			return false;

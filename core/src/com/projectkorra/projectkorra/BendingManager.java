@@ -54,7 +54,7 @@ public class BendingManager implements Runnable {
 
 	public void handleDayNight() {
 		for (final World world : Bukkit.getServer().getWorlds()) {
-			if (ConfigManager.defaultConfig.get().getStringList("Properties.DisabledWorlds").contains(world.getName())) {
+			if (BendingPlayer.isWorldDisabled(world)) {
 				continue;
 			}
 

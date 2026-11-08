@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.projectkorra.projectkorra.attribute.markers.DayNightFactor;
@@ -77,7 +78,14 @@ public class PhaseChange extends IceAbility {
 	private double meltSpeed = 8;
 	private double meltTicks = 0;
 	private boolean allowMeltFlow;
+	/** How long melted ice and snow stay melted when AllowFlow is off, in milliseconds */
+	private static final long MELT_REVERT_TIME = 120 * 1000L;
 	private final CopyOnWriteArrayList<Block> melted_blocks = new CopyOnWriteArrayList<>();
+	/**
+	 * What ice melted into when it was changed for real (AllowFlow). Reverting only restores ice if the block is
+	 * still that, so blocks placed or picked up since aren't overwritten.
+	 */
+	private final Map<Block, Material> meltedInto = new ConcurrentHashMap<>();
 
 	public PhaseChange(final Player player, final PhaseChangeType type) {
 		super(player);
@@ -116,6 +124,9 @@ public class PhaseChange extends IceAbility {
 		if (this.active_types.contains(PhaseChangeType.MELT)) {
 			if (!this.player.isSneaking() || !this.bPlayer.canBend(this)) {
 				this.active_types.remove(PhaseChangeType.MELT);
+				// The session is over: melted TempBlocks revert on their own timers, and AllowFlow melting is permanent
+				this.melted_blocks.clear();
+				this.meltedInto.clear();
 				this.bPlayer.addCooldown("PhaseChangeMelt", this.meltCooldown);
 				this.meltRadius = 1;
 				this.meltTicks = 0;
@@ -385,11 +396,11 @@ public class PhaseChange extends IceAbility {
 					final Snow snow = (Snow) b.getBlockData();
 					if (snow.getLayers() == snow.getMinimumLayers()) {
 						tb.revertBlock();
-						new TempBlock(b, Material.AIR.createBlockData(), 120 * 1000L);
+						new TempBlock(b, Material.AIR.createBlockData(), MELT_REVERT_TIME);
 					} else {
 						tb.revertBlock();
 						snow.setLayers(snow.getLayers() - 1);
-						new TempBlock(b, snow, 120 * 1000L);
+						new TempBlock(b, snow, MELT_REVERT_TIME);
 					}
 				}
 			}
@@ -403,15 +414,17 @@ public class PhaseChange extends IceAbility {
 			if (b.getWorld().getEnvironment() == World.Environment.NETHER) {
 				if (this.allowMeltFlow) {
 					b.setType(Material.AIR);
+					this.meltedInto.put(b, Material.AIR);
 				} else {
-					new TempBlock(b, Material.AIR);
+					new TempBlock(b, Material.AIR.createBlockData(), MELT_REVERT_TIME);
 				}
 			} else {
 				if (this.allowMeltFlow) {
 					b.setType(Material.WATER);
 					b.setBlockData(GeneralMethods.getWaterData(0));
+					this.meltedInto.put(b, Material.WATER);
 				} else {
-					new TempBlock(b, Material.WATER);
+					new TempBlock(b, GeneralMethods.getWaterData(0), MELT_REVERT_TIME);
 				}
 			}
 
@@ -420,10 +433,10 @@ public class PhaseChange extends IceAbility {
 			if (b.getBlockData() instanceof Snow) {
 				final Snow snow = (Snow) b.getBlockData();
 				if (snow.getLayers() == snow.getMinimumLayers()) {
-					new TempBlock(b, Material.AIR.createBlockData(), 120 * 1000L);
+					new TempBlock(b, Material.AIR.createBlockData(), MELT_REVERT_TIME);
 				} else {
 					snow.setLayers(snow.getLayers() - 1);
-					new TempBlock(b, snow, 120 * 1000L);
+					new TempBlock(b, snow, MELT_REVERT_TIME);
 				}
 			}
 
@@ -496,11 +509,12 @@ public class PhaseChange extends IceAbility {
 			for (final Block b : this.melted_blocks) {
 				if (TempBlock.isTempBlock(b)) {
 					TempBlock.get(b).revertBlock();
-				} else {
+				} else if (this.meltedInto.get(b) == b.getType()) {
 					b.setType(Material.ICE);
 				}
 			}
 			this.melted_blocks.clear();
+			this.meltedInto.clear();
 		}
 	}
 

@@ -1,5 +1,6 @@
 package com.projectkorra.projectkorra.util;
 
+import com.projectkorra.projectkorra.ProjectKorra;
 import io.papermc.paper.math.BlockPosition;
 import io.papermc.paper.math.Position;
 import org.bukkit.Bukkit;
@@ -10,6 +11,7 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Levelled;
 import org.bukkit.block.data.Waterlogged;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -29,13 +31,14 @@ public class LightManager {
     private final Map<Integer, BlockData> lightDataMap = new HashMap<>();
     private final Map<Integer, BlockData> waterloggedLightDataMap = new HashMap<>();
 
-    // Scheduler with threads equal to the number of available processors, this handles reverting expired lights
-    private ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
+    // Lights that are fading out, one brightness level per tick
+    private final List<Fade> fades = new ArrayList<>();
+    // Runs every tick on the main thread, since reverting and fading lights reads blocks and player locations
+    private BukkitTask task;
 
     /**
-     * Creates a new LightManager instance. Initializes default BlockData for LIGHT and waterlogged LIGHT,
-     * sets up locks based on the number of available processors * 2, and schedules the reverter task to run periodically
-     * using a ScheduledThreadPoolExecutor.
+     * Creates a new LightManager instance. Initializes default BlockData for LIGHT and waterlogged LIGHT and
+     * sets up locks based on the number of available processors * 2. The tick task starts with the first light.
      */
     private LightManager() {
         int numLocks = Runtime.getRuntime().availableProcessors() * 2;
@@ -45,13 +48,12 @@ public class LightManager {
         }
 
         precomputeLightData();
-        startLightReverter();
     }
 
     /**
      * Retrieves the current time and iterates over all light data in the light map. If the current time is greater
      * than or equal to the expiry time of a light data, it fades the light out and removes the light data from the map.
-     * This is running periodically, or every 50ms, via the scheduled thread pool executor.
+     * This runs every tick on the main thread.
      */
     private void revertExpiredLights() {
         long currentTime = System.currentTimeMillis();
@@ -97,48 +99,54 @@ public class LightManager {
     }
 
     /**
-     * Starts the light reverter task by scheduling it to run at a fixed rate of 50 milliseconds, or 1 tick.
-     * If the scheduler is already shut down, a new ScheduledThreadPoolExecutor is created with the number of available processors.
+     * Starts the task that reverts expired lights, fades them out and sends the block changes, if it isn't running.
+     * It runs every tick on the main thread. A reload cancels all of ProjectKorra's tasks, so the next light
+     * starts it again.
      */
     private void startLightReverter() {
-        if (scheduler.isShutdown()) {
-            scheduler = new ScheduledThreadPoolExecutor(Runtime.getRuntime().availableProcessors());
+        if (this.task == null || this.task.isCancelled()) {
+            this.task = Bukkit.getScheduler().runTaskTimer(ProjectKorra.plugin, this::tick, 0, 1);
         }
+    }
 
-        scheduler.scheduleAtFixedRate(this::revertExpiredLights, 0, 50, TimeUnit.MILLISECONDS);
-        scheduler.scheduleAtFixedRate(this::processBlockChanges, 0, 50, TimeUnit.MILLISECONDS);
+    private void tick() {
+        revertExpiredLights();
+        progressFades();
+        processBlockChanges();
     }
 
     /**
-     * Fades out a light by decrementing its brightness by 1. The light will stop fading when its brightness
-     * reaches 0. The fade process is scheduled to run every 50 milliseconds, or 1 tick.
+     * Fades out a light by decrementing its brightness by 1 each tick. The light will stop fading when its
+     * brightness reaches 0. The first step happens in the same tick the light expires.
      *
      * @param lightData the LightData object containing the light's brightness, location, UUID, and ephemeral flag
      */
     private void fadeLight(LightData lightData) {
-        int brightness = lightData.brightness;
+        fades.add(new Fade(lightData));
+    }
 
-        class TaskHolder {
-            ScheduledFuture<?> future;
-        }
-        TaskHolder taskHolder = new TaskHolder();
-
-        Runnable task = new Runnable() {
-            private int currentBrightness = brightness;
-
-            @Override
-            public void run() {
-                currentBrightness--;
-                if (currentBrightness > 0) {
-                    sendLightChange(lightData.location, currentBrightness, lightData.observers);
-                } else {
-                    revertLight(lightData);
-                    taskHolder.future.cancel(false);
-                }
+    private void progressFades() {
+        final Iterator<Fade> iterator = fades.iterator();
+        while (iterator.hasNext()) {
+            final Fade fade = iterator.next();
+            fade.brightness--;
+            if (fade.brightness > 0) {
+                sendLightChange(fade.lightData.location, fade.brightness, fade.lightData.observers);
+            } else {
+                revertLight(fade.lightData);
+                iterator.remove();
             }
-        };
+        }
+    }
 
-        taskHolder.future = scheduler.scheduleAtFixedRate(task, 0, 50, TimeUnit.MILLISECONDS);
+    private static class Fade {
+        private final LightData lightData;
+        private int brightness;
+
+        private Fade(LightData lightData) {
+            this.lightData = lightData;
+            this.brightness = lightData.brightness;
+        }
     }
 
     /**
@@ -237,22 +245,27 @@ public class LightManager {
      * @param observers  the list of players who can see the light
      */
     private void addLight(Location location, int brightness, long expiry, Collection<? extends Player> observers) {
+        startLightReverter();
         location = location.getBlock().getLocation();
         long expiryTime = System.currentTimeMillis() + expiry;
 
         if (location.getBlock().getLightLevel() >= brightness ||
                 (!location.getBlock().isEmpty() && !location.getBlock().getType().equals(Material.WATER))) return;
 
-        LightData newLightData = new LightData(location, brightness, observers, expiryTime);
+        // The default observers are the server's live online player list; copy it so later joins and quits
+        // don't change who this light was sent to
+        final List<Player> viewers = new ArrayList<>(observers);
+
+        LightData newLightData = new LightData(location, brightness, viewers, expiryTime);
 
         Object lock = getLockForLocation(location);
         synchronized (lock) {
             ConcurrentSkipListSet<LightData> existingSet = lightMap.computeIfAbsent(location, loc -> new ConcurrentSkipListSet<>());
-            existingSet.removeIf(lightData -> lightData.observers.equals(observers));
+            existingSet.removeIf(lightData -> lightData.observers.equals(viewers));
             existingSet.add(newLightData);
         }
 
-        sendLightChange(location, brightness, observers);
+        sendLightChange(location, brightness, viewers);
     }
 
     /**
@@ -277,17 +290,9 @@ public class LightManager {
     public void restart() {
         lightMap.values().forEach(set -> set.forEach(this::revertLight));
         lightMap.clear();
-
-        scheduler.shutdown();
-
-        try {
-            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                scheduler.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            scheduler.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
+        fades.forEach(fade -> revertLight(fade.lightData));
+        fades.clear();
+        processBlockChanges();
 
         startLightReverter();
     }

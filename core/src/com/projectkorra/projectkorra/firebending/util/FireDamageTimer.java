@@ -16,11 +16,12 @@ import com.projectkorra.projectkorra.util.DamageHandler;
 public class FireDamageTimer {
 
 	private static final int MAX_TICKS = 90;
-	private static Ability ability = null;
 	private static final double DAMAGE = 1;
 	private static final long BUFFER = 30;
 	private static final Map<Entity, Player> INSTANCES = new ConcurrentHashMap<>();
 	private static final Map<Entity, Long> TIMES = new ConcurrentHashMap<>();
+	/** The ability that set each entity alight, so burn damage is credited to the right ability */
+	private static final Map<Entity, Ability> ABILITIES = new ConcurrentHashMap<>();
 
 	/**
 	 * Deprecated. Use FireDamageTimer#FireDamageTimer(final Entity entity, Final Player source, Ability abil)
@@ -43,7 +44,11 @@ public class FireDamageTimer {
 		}
 
 		INSTANCES.put(entity, source);
-		ability = abil;
+		if (abil != null) {
+			ABILITIES.put(entity, abil);
+		} else {
+			ABILITIES.remove(entity);
+		}
 	}
 
 	public static boolean isEnflamed(final Entity entity) {
@@ -72,6 +77,7 @@ public class FireDamageTimer {
 			final Player source = INSTANCES.get(entity);
 			
 			// damages the entity.
+			final Ability ability = ABILITIES.get(entity);
 			if (ability == null) {
 				DamageHandler.damageEntity(Lentity, source, damage, CoreAbility.getAbilitiesByElement(Element.FIRE).get(0), false, true);
 			} else {
@@ -90,10 +96,13 @@ public class FireDamageTimer {
 
 	public static void handleFlames() {
 		for (final Entity entity : INSTANCES.keySet()) {
-			if (entity.getFireTicks() <= 0) {
+			if (entity.getFireTicks() <= 0 || !entity.isValid()) {
 				INSTANCES.remove(entity);
 			}
 		}
+		//TIMES is only read for entities in INSTANCES, so drop everything else instead of keeping it forever
+		TIMES.keySet().retainAll(INSTANCES.keySet());
+		ABILITIES.keySet().retainAll(INSTANCES.keySet());
 	}
 
 	/**

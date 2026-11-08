@@ -2,8 +2,11 @@ package com.projectkorra.projectkorra.waterbending.combo;
 
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.projectkorra.projectkorra.ability.util.ComboUtil;
@@ -70,6 +73,8 @@ public class IceBullet extends IceAbility implements ComboAbility {
 	private WaterSourceGrabber waterGrabber;
 	private ArrayList<BukkitRunnable> tasks;
 	private ConcurrentHashMap<Block, TempBlock> affectedBlocks;
+	/** The blocks wanted for the sphere while it is being redrawn, otherwise null */
+	private Map<Block, BlockData> redraw;
 
 	public IceBullet(final Player player) {
 		super(player);
@@ -156,6 +161,8 @@ public class IceBullet extends IceAbility implements ComboAbility {
 			}
 		}
 
+		// Every bullet can hit, but each entity is only damaged once per tick even if several bullets reach it
+		final Set<Entity> hit = new HashSet<>();
 		for (int i = 0; i < this.tasks.size(); i++) {
 			final FireComboStream fstream = (FireComboStream) this.tasks.get(i);
 			final Location loc = fstream.getLocation();
@@ -164,20 +171,14 @@ public class IceBullet extends IceAbility implements ComboAbility {
 				fstream.remove();
 				return;
 			}
-			if (i % 2 == 0) {
-				for (final Entity entity : GeneralMethods.getEntitiesAroundPoint(loc, 1.5)) {
-					if (RegionProtection.isRegionProtected(this.player, entity.getLocation(), "WaterManipulation")) {
-						this.remove();
-						return;
-					}
+			for (final Entity entity : GeneralMethods.getEntitiesAroundPoint(loc, 1.5)) {
+				if (RegionProtection.isRegionProtected(this.player, entity.getLocation(), "WaterManipulation")) {
+					this.remove();
+					return;
+				}
 
-					if (!entity.equals(this.player)) {
-						if (this.damage != 0) {
-							if (entity instanceof LivingEntity) {
-								DamageHandler.damageEntity(entity, this.damage, this);
-							}
-						}
-					}
+				if (!entity.equals(this.player) && this.damage != 0 && entity instanceof LivingEntity && hit.add(entity)) {
+					DamageHandler.damageEntity(entity, this.damage, this);
 				}
 			}
 		}
@@ -188,7 +189,50 @@ public class IceBullet extends IceAbility implements ComboAbility {
 	}
 
 	public void createBlock(final Block block, final Material mat, final BlockData data) {
+		if (this.redraw != null) {
+			this.redraw.putIfAbsent(block, data);
+			return;
+		}
 		this.affectedBlocks.put(block, new TempBlock(block, data, this).setCanSuffocate(false));
+	}
+
+	/**
+	 * Starts collecting the blocks of the sphere instead of placing them, see {@link #finishRedraw()}
+	 */
+	private void startRedraw() {
+		this.redraw = new LinkedHashMap<>();
+	}
+
+	/**
+	 * Changes the sphere's blocks to the ones collected since {@link #startRedraw()}, keeping blocks it already
+	 * has instead of reverting and recreating the whole sphere every tick
+	 */
+	private void finishRedraw() {
+		final Map<Block, BlockData> wanted = this.redraw;
+		this.redraw = null;
+		for (final Block block : this.affectedBlocks.keySet()) {
+			if (!wanted.containsKey(block)) {
+				this.affectedBlocks.remove(block).revertBlock();
+			}
+		}
+		for (final Map.Entry<Block, BlockData> entry : wanted.entrySet()) {
+			final TempBlock tb = this.affectedBlocks.get(entry.getKey());
+			if (tb != null && !tb.isReverted()) {
+				if (!tb.getBlockData().equals(entry.getValue())) {
+					tb.setType(entry.getValue());
+				}
+			} else {
+				this.affectedBlocks.put(entry.getKey(), new TempBlock(entry.getKey(), entry.getValue(), this).setCanSuffocate(false));
+			}
+		}
+	}
+
+	/**
+	 * @return True if the block is one of the sphere's own blocks and nothing else has been placed over it
+	 */
+	private boolean isOwnBlock(final Block block) {
+		final TempBlock tb = this.affectedBlocks.get(block);
+		return tb != null && TempBlock.get(block) == tb;
 	}
 
 	public void drawWaterCircle(final Location loc, final double theta, final double increment, final double radius) {
@@ -205,7 +249,7 @@ public class IceBullet extends IceAbility implements ComboAbility {
 			final Block block = loc.clone().add(dir).getBlock();
 			this.location = block.getLocation();
 
-			if (ElementalAbility.isAir(block.getType()) && !RegionProtection.isRegionProtected(this.player, block.getLocation(), "WaterManipulation")) {
+			if ((ElementalAbility.isAir(block.getType()) || this.isOwnBlock(block)) && !RegionProtection.isRegionProtected(this.player, block.getLocation(), "WaterManipulation")) {
 				this.createBlock(block, mat, data);
 			}
 		}
@@ -253,17 +297,19 @@ public class IceBullet extends IceAbility implements ComboAbility {
 			if (this.state == AbilityState.ICE_BULLET_FORMING) {
 				if (timeDiff < 1000 * this.animationSpeed) {
 					final double steps = this.radius * ((timeDiff + 100) / (1000.0 * this.animationSpeed));
-					this.revertBlocks();
+					this.startRedraw();
 					for (double i = 0; i < steps; i++) {
 						this.drawWaterCircle(this.player.getEyeLocation().clone().add(0, i, 0), 360, 5, this.radius - i);
 						this.drawWaterCircle(this.player.getEyeLocation().clone().add(0, -i, 0), 360, 5, this.radius - i);
 					}
+					this.finishRedraw();
 				} else if (timeDiff < 2500 * this.animationSpeed) {
-					this.revertBlocks();
+					this.startRedraw();
 					for (double i = 0; i < this.radius; i++) {
 						this.drawWaterCircle(this.player.getEyeLocation().clone().add(0, i, 0), 360, 5, this.radius - i, Material.ICE, Material.ICE.createBlockData());
 						this.drawWaterCircle(this.player.getEyeLocation().clone().add(0, -i, 0), 360, 5, this.radius - i, Material.ICE, Material.ICE.createBlockData());
 					}
+					this.finishRedraw();
 				}
 
 				if (timeDiff < this.shootTime) {

@@ -41,6 +41,8 @@ import com.projectkorra.projectkorra.util.MovementHandler;
 
 public class Lightning extends LightningAbility {
 
+	private int lightParticleCounter;
+
 	public enum State {
 		START, STRIKE, MAINBOLT, CHAIN
 	}
@@ -249,7 +251,7 @@ public class Lightning extends LightningAbility {
 	 * @param block
 	 */
 	private void powerLightningRods(final Block block) {
-		if (isLightningRod(block)) {
+		if (isLightningRod(block) && !GeneralMethods.isRegionProtectedFromBuild(this, block.getLocation())) {
 			block.getWorld().spawnParticle(Particle.valueOf("ELECTRIC_SPARK"), block.getLocation().clone().add(0.5, 0.5, 0.5), 6, 0.125, 0.125, 0.125, 0.05);
 			
 			List<Block> blocks = new ArrayList<>();
@@ -302,7 +304,9 @@ public class Lightning extends LightningAbility {
 	}
 	
 	private void updateLightningRod(final Block block, final boolean powered) {
-		Powerable powerable = (Powerable) block.getBlockData();
+		if (!(block.getBlockData() instanceof Powerable powerable)) {
+			return; //The rod was broken before it was un-powered
+		}
 		powerable.setPowered(powered);
 		block.setBlockData(powerable);
 		if (!powered) {
@@ -752,6 +756,8 @@ public class Lightning extends LightningAbility {
 	 * reach water, in which case they will generate subarcs to branch out.
 	 **/
 	public class LightningParticle extends BukkitRunnable {
+		/** Only every fourth particle of a bolt gives off light; one per particle was ~140 lights per tick */
+		private final boolean emitsLight = Lightning.this.lightParticleCounter++ % 4 == 0;
 		private boolean selfHitWater;
 		private int count = 0;
 		private int waterArcs;
@@ -780,7 +786,9 @@ public class Lightning extends LightningAbility {
 		@Override
 		public void run() {
 			playLightningbendingParticle(this.location, 0F, 0F, 0F);
-			emitFirebendingLight(this.location);
+			if (this.emitsLight) {
+				emitFirebendingLight(this.location);
+			}
 
 			this.count++;
 			if (this.count > 5) {

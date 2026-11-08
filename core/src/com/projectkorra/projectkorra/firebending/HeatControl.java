@@ -4,11 +4,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.projectkorra.projectkorra.attribute.markers.DayNightFactor;
@@ -39,6 +37,9 @@ import com.projectkorra.projectkorra.waterbending.ice.PhaseChange;
 import com.projectkorra.projectkorra.waterbending.multiabilities.WaterArmsSpear;
 
 public class HeatControl extends FireAbility {
+
+	private static final int EXTINGUISH_SCAN_INTERVAL = 5;
+	private int extinguishTicks;
 
 	public enum HeatControlType {
 		COOK, EXTINGUISH, MELT, SOLIDIFY
@@ -186,9 +187,9 @@ public class HeatControl extends FireAbility {
 				return;
 			}
 
-			final Set<Material> blocks = new HashSet<>();
-			for (final Material material : getTransparentMaterials()) {
-				blocks.add(material);
+			// Scanning the whole radius every tick is expensive; every 5 ticks still puts fire out almost instantly
+			if (this.extinguishTicks++ % EXTINGUISH_SCAN_INTERVAL != 0) {
+				return;
 			}
 
 			for (final Block block : GeneralMethods.getBlocksAroundPoint(this.player.getLocation(), this.extinguishRadius)) {
@@ -367,7 +368,7 @@ public class HeatControl extends FireAbility {
 
 		final List<Block> lava = new ArrayList<Block>();
 		for (final Location l : area) {
-			if (isLava(l.getBlock())) {
+			if (isLava(l.getBlock()) && !GeneralMethods.isRegionProtectedFromBuild(this, l)) {
 				lava.add(l.getBlock());
 			}
 		}
@@ -485,7 +486,7 @@ public class HeatControl extends FireAbility {
 
 		for (double i = 0; i <= range; i++) {
 			final Block block = location.clone().add(vector.clone().multiply(i)).getBlock();
-			if (GeneralMethods.isRegionProtectedFromBuild(player, location)) {
+			if (GeneralMethods.isRegionProtectedFromBuild(player, block.getLocation())) {
 				continue;
 			}
 			if (isLava(block)) {

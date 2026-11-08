@@ -1,7 +1,8 @@
 package com.projectkorra.projectkorra.earthbending;
 
-import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -33,6 +34,7 @@ import com.projectkorra.projectkorra.ability.EarthAbility;
 import com.projectkorra.projectkorra.ability.ElementalAbility;
 import com.projectkorra.projectkorra.attribute.Attribute;
 import com.projectkorra.projectkorra.avatar.AvatarState;
+import com.projectkorra.projectkorra.region.RegionProtection;
 import com.projectkorra.projectkorra.util.MovementHandler;
 import com.projectkorra.projectkorra.util.TempArmor;
 import com.projectkorra.projectkorra.util.TempArmorStand;
@@ -60,7 +62,10 @@ public class EarthGrab extends EarthAbility {
 	private Location origin;
 	private Vector direction;
 	private TempArmor armor;
-	private final Material[] crops = new Material[] { Material.WHEAT, Material.BEETROOTS, Material.CARROTS, Material.POTATOES, Material.SUGAR_CANE, Material.MELON, Material.PUMPKIN };
+	private static final int CROP_SCAN_INTERVAL = 5;
+	private int dragTicks;
+	private static final Set<Material> CROPS = EnumSet.of(Material.WHEAT, Material.BEETROOTS, Material.CARROTS, Material.POTATOES, Material.SUGAR_CANE, Material.MELON, Material.PUMPKIN);
+	private TempBlock trapBlock;
 
 	public static enum GrabMode {
 		TRAP, DRAG, PROJECTING;
@@ -137,7 +142,7 @@ public class EarthGrab extends EarthAbility {
 	public void project() {
 		this.origin = this.origin.add(this.direction);
 		Block top = GeneralMethods.getTopBlock(this.origin, 2);
-		if (this.origin.distance(this.player.getLocation()) > this.range) {
+		if (!this.origin.getWorld().equals(this.player.getWorld()) || this.origin.distance(this.player.getLocation()) > this.range) {
 			this.remove();
 			return;
 		}
@@ -198,7 +203,8 @@ public class EarthGrab extends EarthAbility {
 			this.trap.setHealth(this.trapHP);
 			this.trap.setMetadata("earthgrab:trap", new FixedMetadataValue(ProjectKorra.plugin, this));
 
-			new TempBlock(this.target.getLocation().clone().subtract(0, 1, 0).getBlock(), this.target.getLocation().clone().subtract(0, 1, 0).getBlock().getType());
+			// Reverted in remove(), so the block doesn't stay a TempBlock (unbendable, with reset block data) forever
+			this.trapBlock = new TempBlock(this.target.getLocation().clone().subtract(0, 1, 0).getBlock(), this.target.getLocation().clone().subtract(0, 1, 0).getBlock().getType());
 
 			this.mHandler = new MovementHandler(this.target, this);
 			this.mHandler.stop(Element.EARTH.getColor() + "* Trapped *");
@@ -235,7 +241,7 @@ public class EarthGrab extends EarthAbility {
 			return;
 		}
 
-		if (this.trap.getLocation().distance(this.target.getLocation()) > 2) {
+		if (!this.trap.getWorld().equals(this.target.getWorld()) || this.trap.getLocation().distance(this.target.getLocation()) > 2) {
 			this.remove();
 			return;
 		}
@@ -255,7 +261,7 @@ public class EarthGrab extends EarthAbility {
 			return;
 		}
 
-		if (this.player.getLocation().distance(this.target.getLocation()) > this.range) {
+		if (!this.player.getWorld().equals(this.target.getWorld()) || this.player.getLocation().distance(this.target.getLocation()) > this.range) {
 			this.remove();
 			return;
 		}
@@ -286,14 +292,17 @@ public class EarthGrab extends EarthAbility {
 			return;
 		}
 
-		for (final Location l : GeneralMethods.getCircle(this.player.getLocation(), (int) Math.floor(this.range), 2, false, false, 0)) {
-			if (!Arrays.asList(this.crops).contains(l.getBlock().getType())) {
-				continue;
-			}
+		// Harvesting crops scans a large area, so only do it every few ticks
+		if (this.dragTicks++ % CROP_SCAN_INTERVAL == 0) {
+			for (final Location l : GeneralMethods.getCircle(this.player.getLocation(), (int) Math.floor(this.range), 2, false, false, 0)) {
+				final Block b = l.getBlock();
+				if (!CROPS.contains(b.getType()) || RegionProtection.isRegionProtected(this, l)) {
+					continue;
+				}
 
-			final Block b = l.getBlock();
-			if ((b.getBlockData() instanceof Ageable && ((Ageable) b.getBlockData()).getAge() == ((Ageable) b.getBlockData()).getMaximumAge()) || b.getType() == Material.MELON || b.getType() == Material.PUMPKIN) {
-				b.breakNaturally();
+				if ((b.getBlockData() instanceof Ageable && ((Ageable) b.getBlockData()).getAge() == ((Ageable) b.getBlockData()).getMaximumAge()) || b.getType() == Material.MELON || b.getType() == Material.PUMPKIN) {
+					b.breakNaturally();
+				}
 			}
 		}
 
@@ -304,7 +313,9 @@ public class EarthGrab extends EarthAbility {
 		}
 
 		for (Entity entity : ents) {
-			if (!isEarth(entity.getLocation().clone().subtract(0, 1, 0).getBlock()) && (this.bPlayer.canSandbend() && !isSand(entity.getLocation().clone().subtract(0, 1, 0).getBlock())) && entity.getLocation().clone().subtract(0, 1, 0).getBlock().getType() != Material.FARMLAND) {
+			// Only drag things resting on earth, sand (if they can sandbend) or farmland
+			final Block below = entity.getLocation().clone().subtract(0, 1, 0).getBlock();
+			if (!(isEarth(below) || (this.bPlayer.canSandbend() && isSand(below)) || below.getType() == Material.FARMLAND)) {
 				continue;
 			}
 			if (entity instanceof Trident) {
@@ -343,6 +354,9 @@ public class EarthGrab extends EarthAbility {
 			this.trap.remove();
 			if (TempArmor.getTempArmorList(this.target).contains(this.armor)) {
 				this.armor.revert();
+			}
+			if (this.trapBlock != null) {
+				this.trapBlock.revertBlock();
 			}
 		}
 		this.bPlayer.addCooldown(this);

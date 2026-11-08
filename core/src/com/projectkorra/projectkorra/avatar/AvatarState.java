@@ -117,6 +117,8 @@ public class AvatarState extends AvatarAbility {
 	public static boolean activateLowHealth(@NotNull BendingPlayer player, double damage, boolean willDie) {
 		if (!player.getAbilities().containsValue("AvatarState")) return false;
 		if (player.isOnCooldown("AvatarState")) return false;
+		// Creating another AvatarState while one is active would toggle it off
+		if (CoreAbility.hasAbility(player.getPlayer(), AvatarState.class)) return false;
 
 		if (ConfigManager.avatarStateConfig.get().getBoolean("LowHealth.Enabled")) {
 			boolean preventDeath = ConfigManager.avatarStateConfig.get().getBoolean("LowHealth.PreventDeath", false);
@@ -125,10 +127,11 @@ public class AvatarState extends AvatarAbility {
 			final int amount = ConfigManager.avatarStateConfig.get().getInt("LowHealth.BoostHealth.Amount", 2);
 			boolean yellowHearts = ConfigManager.avatarStateConfig.get().getBoolean("LowHealth.BoostHealth.YellowHearts");
 			final double currentHealth = player.getPlayer().getHealth() - damage;
+			final boolean lethal = willDie || currentHealth <= 0; // Damage that leaves exactly 0 health is lethal too
 
 			if (currentHealth <= healthThreshold) {
 
-				if (willDie && !preventDeath) {
+				if (lethal && !preventDeath) {
 					return false;
 				}
 
@@ -136,17 +139,17 @@ public class AvatarState extends AvatarAbility {
 					//Delay by 1 tick so the event doesn't override our changes
 					Bukkit.getScheduler().runTaskLater(ProjectKorra.plugin, () -> {
 						if (yellowHearts) {
-							if (willDie) player.getPlayer().setHealth(0.5);
+							if (lethal) player.getPlayer().setHealth(0.5);
 							player.getPlayer().setAbsorptionAmount(amount);
 						} else {
-							if (willDie) player.getPlayer().setHealth(amount);
+							if (lethal) player.getPlayer().setHealth(amount);
 							else player.getPlayer().setHealth(Math.min(currentHealth + amount, player.getPlayer().getMaxHealth()));
 						}
 					}, 1L);
 				}
 
 				new AvatarState(player.getPlayer());
-				return preventDeath && willDie;
+				return preventDeath && lethal;
 			}
 		}
 		return false;

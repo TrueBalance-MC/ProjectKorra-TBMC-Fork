@@ -1575,7 +1575,7 @@ public class ConfigManager {
 			config.addDefault("Abilities.Fire.FireBurst.Damage", 2);
 			config.addDefault("Abilities.Fire.FireBurst.Ignite", true);
 			config.addDefault("Abilities.Fire.FireBurst.ChargeTime", 3500);
-			config.addDefault("Abilities.Fire.FireBurst.Cooldown", 0);
+			config.addDefault("Abilities.Fire.FireBurst.Cooldown", 5000);
 			config.addDefault("Abilities.Fire.FireBurst.Range", 14);
 			config.addDefault("Abilities.Fire.FireBurst.AnglePhi", 10);
 			config.addDefault("Abilities.Fire.FireBurst.AngleTheta", 10);

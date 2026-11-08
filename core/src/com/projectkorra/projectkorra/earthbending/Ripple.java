@@ -2,6 +2,7 @@ package com.projectkorra.projectkorra.earthbending;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Location;
@@ -24,6 +25,8 @@ import com.projectkorra.projectkorra.util.DamageHandler;
 public class Ripple extends EarthAbility {
 
 	private static final Map<Integer[], Block> BLOCKS = new ConcurrentHashMap<Integer[], Block>();
+	/** The x/z columns moved this tick. Arrays compare by identity, so BLOCKS can't be used to look them up. */
+	private static final Set<Long> MOVED_COLUMNS = ConcurrentHashMap.newKeySet();
 
 	private int step;
 	private int maxStep;
@@ -290,20 +293,22 @@ public class Ripple extends EarthAbility {
 		final int z = block.getZ();
 		final Integer[] pair = new Integer[] { x, z };
 		BLOCKS.put(pair, block);
+		MOVED_COLUMNS.add(column(x, z));
+	}
+
+	private static long column(final int x, final int z) {
+		return ((long) x << 32) | (z & 0xFFFFFFFFL);
 	}
 
 	private static boolean hasAnyMoved(final Block block) {
 		final int x = block.getX();
 		final int z = block.getZ();
-		final Integer[] pair = new Integer[] { x, z };
-		if (BLOCKS.containsKey(pair)) {
-			return true;
-		}
-		return false;
+		return MOVED_COLUMNS.contains(column(x, z));
 	}
 
 	public static void progressAllCleanup() {
 		BLOCKS.clear();
+		MOVED_COLUMNS.clear();
 	}
 
 	public static Map<Integer[], Block> getBlocks() {

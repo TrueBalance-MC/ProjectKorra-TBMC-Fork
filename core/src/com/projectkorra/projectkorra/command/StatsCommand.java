@@ -4,9 +4,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -16,7 +18,6 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import com.projectkorra.projectkorra.Element;
 import com.projectkorra.projectkorra.ProjectKorra;
@@ -96,15 +97,14 @@ public class StatsCommand extends PKCommand {
 			} catch (IndexOutOfBoundsException | NumberFormatException e) {}
 			final Object o = object;
 			final int p = page;
-			new BukkitRunnable() {
-				@Override
-				public void run() {
-					final List<String> messages = StatsCommand.this.getLeaderboard(sender, o, statistic, p);
-					for (final String message : messages) {
-						sender.sendMessage(ChatUtil.legacy(message));
-					}
+			// Snapshot the online players on the main thread; the leaderboard is built on the database thread
+			final List<UUID> online = ProjectKorra.plugin.getServer().getOnlinePlayers().stream().map(Player::getUniqueId).toList();
+			DBConnection.sql.runAsync(() -> {
+				final List<String> messages = StatsCommand.this.getLeaderboard(sender, o, statistic, p, online);
+				for (final String message : messages) {
+					sender.sendMessage(ChatUtil.legacy(message));
 				}
-			}.runTaskAsynchronously(ProjectKorra.plugin);
+			});
 		}
 	}
 
@@ -154,8 +154,13 @@ public class StatsCommand extends PKCommand {
 	}
 
 	public List<String> getLeaderboard(final CommandSender sender, final Object object, final Statistic statistic, final int page) {
+		return this.getLeaderboard(sender, object, statistic, page, onlineUUIDs());
+	}
+
+	private List<String> getLeaderboard(final CommandSender sender, final Object object, final Statistic statistic, final int page, final Collection<UUID> online) {
 		final List<String> messages = new ArrayList<>();
-		final List<UUID> uuids = this.pullUUIDs(statistic, object);
+		final Map<UUID, Long> values = this.pullValues(statistic, object, online);
+		final List<UUID> uuids = sortByValue(values);
 		final int maxPage = (uuids.size() / 10) + 1;
 		int p = page > maxPage ? maxPage : page;
 		p = p < 1 ? 1 : p;
@@ -183,12 +188,7 @@ public class StatsCommand extends PKCommand {
 				break;
 			}
 			final UUID uuid = uuids.get(index);
-			long value = 0;
-			if (object == null) {
-				value = StatisticsMethods.getStatisticTotal(uuid, statistic);
-			} else {
-				value = StatisticsMethods.getStatistic(uuid, object, statistic);
-			}
+			final long value = values.get(uuid);
 			final OfflinePlayer oPlayer = ProjectKorra.plugin.getServer().getOfflinePlayer(uuid);
 			messages.add("&7" + (index + 1) + ") &e" + oPlayer.getName() + " &f" + value);
 		}
@@ -200,48 +200,40 @@ public class StatsCommand extends PKCommand {
 	}
 
 	public List<UUID> pullUUIDs(final Statistic statistic, final Object object) {
-		final Set<UUID> uuids = new HashSet<>();
-		try (ResultSet rs = DBConnection.sql.readQuery("SELECT uuid FROM pk_stats")) {
+		return sortByValue(this.pullValues(statistic, object, onlineUUIDs()));
+	}
+
+	private static List<UUID> onlineUUIDs() {
+		return ProjectKorra.plugin.getServer().getOnlinePlayers().stream().map(Player::getUniqueId).toList();
+	}
+
+	/**
+	 * Reads each player's value once. The old version looked values up again for every comparison while sorting,
+	 * which is a database query per offline player per comparison.
+	 * @return The players with a value above 0, mapped to their value
+	 */
+	private Map<UUID, Long> pullValues(final Statistic statistic, final Object object, final Collection<UUID> online) {
+		final Set<UUID> uuids = new HashSet<>(online);
+		try (ResultSet rs = DBConnection.sql.readQuery("SELECT DISTINCT uuid FROM pk_stats")) {
 			while (rs.next()) {
-				final UUID uuid = UUID.fromString(rs.getString("uuid"));
-				if (object == null) {
-					if (StatisticsMethods.getStatisticTotal(uuid, statistic) > 0) {
-						uuids.add(uuid);
-					}
-				} else {
-					if (StatisticsMethods.getStatistic(uuid, object, statistic) > 0) {
-						uuids.add(uuid);
-					}
-				}
+				uuids.add(UUID.fromString(rs.getString("uuid")));
 			}
 		} catch (final SQLException e) {
 			e.printStackTrace();
 		}
-		for (final Player player : ProjectKorra.plugin.getServer().getOnlinePlayers()) {
-			final UUID uuid = player.getUniqueId();
-			if (object == null) {
-				if (StatisticsMethods.getStatisticTotal(uuid, statistic) > 0) {
-					uuids.add(uuid);
-				}
-			} else {
-				if (StatisticsMethods.getStatistic(uuid, object, statistic) > 0) {
-					uuids.add(uuid);
-				}
+		final Map<UUID, Long> values = new HashMap<>();
+		for (final UUID uuid : uuids) {
+			final long value = object == null ? StatisticsMethods.getStatisticTotal(uuid, statistic) : StatisticsMethods.getStatistic(uuid, object, statistic);
+			if (value > 0) {
+				values.put(uuid, value);
 			}
 		}
-		final List<UUID> list = new ArrayList<>(uuids);
-		Collections.sort(list, (u1, u2) -> {
-			long value1 = 0;
-			long value2 = 0;
-			if (object == null) {
-				value1 = StatisticsMethods.getStatisticTotal(u1, statistic);
-				value2 = StatisticsMethods.getStatisticTotal(u2, statistic);
-			} else {
-				value1 = StatisticsMethods.getStatistic(u1, object, statistic);
-				value2 = StatisticsMethods.getStatistic(u2, object, statistic);
-			}
-			return (int) (value2 - value1);
-		});
+		return values;
+	}
+
+	private static List<UUID> sortByValue(final Map<UUID, Long> values) {
+		final List<UUID> list = new ArrayList<>(values.keySet());
+		list.sort((u1, u2) -> Long.compare(values.get(u2), values.get(u1)));
 		return list;
 	}
 

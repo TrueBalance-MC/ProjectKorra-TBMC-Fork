@@ -21,8 +21,13 @@ import com.projectkorra.projectkorra.ability.util.Collision;
 import com.projectkorra.projectkorra.attribute.Attribute;
 import com.projectkorra.projectkorra.avatar.AvatarState;
 import com.projectkorra.projectkorra.command.Commands;
+import com.projectkorra.projectkorra.util.TempBlock;
 
 public class AirShield extends AirAbility {
+
+	/** How often, in ticks, the shield puts out fire inside it */
+	private static final int FIRE_SCAN_INTERVAL = 5;
+	private int fireScanTicks = -1;
 
 	@Attribute(Attribute.AVATAR_STATE_TOGGLE)
 	private boolean isToggledByAvatarState;
@@ -173,10 +178,17 @@ public class AirShield extends AirAbility {
 			}
 		}
 
-		for (final Block testblock : GeneralMethods.getBlocksAroundPoint(this.player.getLocation(), this.radius)) {
-			if (FireAbility.isFire(testblock.getType())) {
-				testblock.setType(Material.AIR);
-				testblock.getWorld().playEffect(testblock.getLocation(), Effect.EXTINGUISH, 0);
+		// Scanning the whole sphere for fire is expensive, so only do it every few ticks
+		if (++this.fireScanTicks % FIRE_SCAN_INTERVAL == 0) {
+			for (final Block testblock : GeneralMethods.getBlocksAroundPoint(this.player.getLocation(), this.radius)) {
+				if (FireAbility.isFire(testblock.getType()) && !RegionProtection.isRegionProtected(this, testblock.getLocation())) {
+					if (TempBlock.isTempBlock(testblock)) {
+						TempBlock.get(testblock).revertBlock(); // Revert it, so the TempBlock system doesn't restore the fire later
+					} else {
+						testblock.setType(Material.AIR);
+					}
+					testblock.getWorld().playEffect(testblock.getLocation(), Effect.EXTINGUISH, 0);
+				}
 			}
 		}
 

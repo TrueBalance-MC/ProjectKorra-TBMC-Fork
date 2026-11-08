@@ -34,7 +34,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 
 import com.projectkorra.projectkorra.Element.SubElement;
@@ -162,14 +161,17 @@ public class OfflineBendingPlayer {
             }
             PLAYERS.put(uuid, bPlayer);
 
-            final ResultSet rs2 = DBConnection.sql.readQuery("SELECT * FROM pk_players WHERE uuid = ?", uuid.toString());
-            try {
+            try (ResultSet rs2 = DBConnection.sql.readQuery("SELECT * FROM pk_players WHERE uuid = ?", uuid.toString())) {
+                if (rs2 == null) {
+                    throw new SQLException("Could not read the bending data of " + uuid);
+                }
                 if (!rs2.next()) { // Data doesn't exist, we want a completely new player.
                     DBConnection.sql.modifyQuery("INSERT INTO pk_players (uuid, player, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", uuid.toString(), offlinePlayer.getName(), "null", "null", "null", "null", "null", "null", "null", "null", "null");
                     Bukkit.getScheduler().runTask(ProjectKorra.plugin, () -> ProjectKorra.log.info("Created new BendingPlayer for " + offlinePlayer.getName()));
                     OfflineBendingPlayer newPlayer;
                     if (offlinePlayer.isOnline()) {
                         BendingPlayer onlinePlayer = new BendingPlayer(offlinePlayer.getPlayer());
+                        onlinePlayer.loading = false;
                         // Call postLoad() on the main thread and wait for it to complete
                         Bukkit.getScheduler().callSyncMethod(ProjectKorra.plugin, () -> {
                             onlinePlayer.postLoad();
@@ -179,15 +181,17 @@ public class OfflineBendingPlayer {
                         newPlayer = onlinePlayer;
                     } else {
                         newPlayer = new OfflineBendingPlayer(offlinePlayer);
+                        newPlayer.loading = false;
+                        newPlayer.uncacheAfter(30_000);
                     }
 
                     PLAYERS.put(uuid, newPlayer);
-                    Bukkit.getScheduler().callSyncMethod(ProjectKorra.plugin, () -> {
+                    // Complete on the main thread, like a returning player, so callbacks can use the Bukkit API
+                    Bukkit.getScheduler().runTask(ProjectKorra.plugin, () -> {
                         Bukkit.getPluginManager().callEvent(new BendingPlayerLoadEvent(newPlayer));
-                        return true;
+                        LOADING.remove(uuid);
+                        future.complete(newPlayer);
                     });
-                    future.complete(newPlayer);
-                    LOADING.remove(uuid);
                 } else {
                     // The player has at least played before.
                     final String player2 = rs2.getString("player");
@@ -469,10 +473,23 @@ public class OfflineBendingPlayer {
                         future.complete(finalBPlayer4);
                     });
                 }
-            } catch (final SQLException | ExecutionException | InterruptedException ex) {
+            } catch (final Throwable ex) {
+                // Never leave the load half done: a stuck LOADING entry would hand every later load this
+                // future, which never completes, so the player would have no bending until a restart
+                ProjectKorra.log.severe("Failed to load the bending data of " + offlinePlayer.getName() + " (" + uuid + ")");
                 ex.printStackTrace();
-                LOADING.remove(uuid);
-                future.cancel(true);
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                Bukkit.getScheduler().runTask(ProjectKorra.plugin, () -> {
+                    final OfflineBendingPlayer partial = PLAYERS.get(uuid);
+                    if (partial != null && partial.loading) {
+                        PLAYERS.remove(uuid);
+                        ONLINE_PLAYERS.remove(uuid);
+                    }
+                    LOADING.remove(uuid);
+                    future.completeExceptionally(ex);
+                });
             }
         };
 
@@ -589,24 +606,15 @@ public class OfflineBendingPlayer {
      */
     public void saveTempElements() {
         Bukkit.getScheduler().runTaskLater(ProjectKorra.plugin, () -> {
-
-            try {
-                DBConnection.sql.getConnection().setAutoCommit(false);
-                DBConnection.sql.modifyQuery("DELETE FROM pk_temp_elements WHERE uuid = ?", uuid.toString());
-                DBConnection.sql.getConnection().commit(); //Force the delete statement to go through before the next SQL statement
-                for (Element e : this.tempElements.keySet()) {
-                    DBConnection.sql.modifyQuery("INSERT INTO pk_temp_elements (uuid, element, expiry) VALUES (?, ?, ?)", uuid.toString(), e.getName(), this.tempElements.get(e));
-                }
-                for (Element e : this.tempSubElements.keySet()) {
-                    DBConnection.sql.modifyQuery("INSERT INTO pk_temp_elements (uuid, element, expiry) VALUES (?, ?, ?)", uuid.toString(), e.getName(), this.tempSubElements.get(e));
-                }
-                DBConnection.sql.getConnection().commit(); //Force the delete statement to go through before the next SQL statement
-                DBConnection.sql.getConnection().setAutoCommit(true);
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-
-
+            // Copy the elements on the main thread, then write them on the database thread. Its tasks run in
+            // order, so the delete always goes through before the inserts.
+            final Map<String, Long> expiries = new HashMap<>();
+            this.tempElements.forEach((e, expiry) -> expiries.put(e.getName(), expiry));
+            this.tempSubElements.forEach((e, expiry) -> expiries.put(e.getName(), expiry));
+            DBConnection.sql.runAsync(() -> {
+                DBConnection.sql.modifyQuerySync("DELETE FROM pk_temp_elements WHERE uuid = ?", uuid.toString());
+                expiries.forEach((name, expiry) -> DBConnection.sql.modifyQuerySync("INSERT INTO pk_temp_elements (uuid, element, expiry) VALUES (?, ?, ?)", uuid.toString(), name, expiry));
+            });
         }, 1L);
     }
 
@@ -905,27 +913,28 @@ public class OfflineBendingPlayer {
     /**
      * Commits cooldowns to the database
      */
-    private void saveCooldownsForce() {
-        DBConnection.sql.modifyQuerySync("DELETE FROM pk_cooldowns WHERE uuid = ?", this.uuid.toString());
+    private CompletableFuture<Void> saveCooldownsForce() {
+        // Copy the cooldowns on the calling (main) thread; the map isn't thread safe
+        final Map<String, Long> saved = new HashMap<>();
         for (final Map.Entry<String, Cooldown> entry : this.cooldowns.entrySet()) {
-            final String name = entry.getKey();
-            final Cooldown cooldown = entry.getValue();
-            if (!cooldown.isDatabase()) continue;
-            try (ResultSet rs = DBConnection.sql.readQuery("SELECT value FROM pk_cooldowns WHERE uuid = ? AND cooldown = ?", this.uuid.toString(), name)) {
-                if (rs.next()) {
-                    DBConnection.sql.modifyQuerySync("UPDATE pk_cooldowns SET value = ? WHERE uuid = ? AND cooldown = ?", cooldown.getCooldown(), this.uuid.toString(), name);
-                } else {
-                    DBConnection.sql.modifyQuerySync("INSERT INTO pk_cooldowns (uuid, cooldown, value) VALUES (?, ?, ?)", this.uuid.toString(), name, cooldown.getCooldown());
-                }
-            } catch (final SQLException e) {
-                e.printStackTrace();
+            if (entry.getValue().isDatabase()) {
+                saved.put(entry.getKey(), entry.getValue().getCooldown());
             }
         }
+        final String uuid = this.uuid.toString();
+        // Every row is deleted first, so the cooldowns can be inserted without checking for existing rows
+        return DBConnection.sql.runAsync(() -> {
+            DBConnection.sql.modifyQuerySync("DELETE FROM pk_cooldowns WHERE uuid = ?", uuid);
+            saved.forEach((name, value) -> DBConnection.sql.modifyQuerySync("INSERT INTO pk_cooldowns (uuid, cooldown, value) VALUES (?, ?, ?)", uuid, name, value));
+        });
     }
 
     public void saveCooldowns(boolean async) {
-        if (async) Bukkit.getScheduler().runTaskAsynchronously(ProjectKorra.plugin, this::saveCooldownsForce);
-        else this.saveCooldownsForce();
+        final CompletableFuture<Void> save = this.saveCooldownsForce();
+        if (!async) {
+            // Wait for it, so it also runs after any earlier queued save of this player
+            save.exceptionally(e -> null).join(); // Failures are already logged by runAsync
+        }
     }
 
     public void saveCooldowns() {

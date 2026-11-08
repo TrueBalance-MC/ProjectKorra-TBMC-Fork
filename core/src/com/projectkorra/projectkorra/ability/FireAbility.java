@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 public abstract class FireAbility extends ElementalAbility {
 
@@ -84,9 +85,12 @@ public abstract class FireAbility extends ElementalAbility {
 	}
 
 	public void createTempFire(final Location loc, final long time) {
-		if(isIgnitable(loc.getBlock())) {
-			new TempBlock(loc.getBlock(), createFireState(loc.getBlock(), getFireType() == Material.SOUL_FIRE, this.getPlayer()), time);
-			SOURCE_PLAYERS.put(loc.getBlock(), this.getPlayer());
+		final Block block = loc.getBlock();
+		if(isIgnitable(block)) {
+			final Player player = this.getPlayer();
+			final TempBlock tempBlock = new TempBlock(block, createFireState(block, getFireType() == Material.SOUL_FIRE, player), time);
+			SOURCE_PLAYERS.put(block, player);
+			tempBlock.setRevertTask(() -> SOURCE_PLAYERS.remove(block, player)); //Stop crediting this player once their fire is gone
 		}
 	}
 
@@ -159,26 +163,24 @@ public abstract class FireAbility extends ElementalAbility {
 	 * @return The fire blockstate
 	 */
 	public static BlockData createFireState(Block position, boolean blue, Player sourcePlayer) {
-		List<Integer> activeColors = new ArrayList<>(sourcePlayer.getPersistentDataContainer().getOrDefault(
-			new NamespacedKey("tbmccore","active_fire_colors"),
-				PersistentDataType.LIST.integers(),
-				List.of()
-		));
-		Fire fire = (Fire) getPilotDataFromCode(2);
+		final List<Integer> activeColors = sourcePlayer.getPersistentDataContainer().getOrDefault(ACTIVE_FIRE_COLORS, PersistentDataType.LIST.integers(), List.of());
+		int code = DEFAULT_FIRE_CODE;
 		if (!activeColors.isEmpty()) {
 			// get fire data from random list entry
-			Random rand = new Random();
-			int index = rand.nextInt(activeColors.size());
-			int code = activeColors.get(rand.nextInt(activeColors.size()));
-			if (code == 6) {
+			code = activeColors.get(ThreadLocalRandom.current().nextInt(activeColors.size()));
+			if (code == BLUE_FIRE_CODE) {
 				blue = true;
-			} else {
-				fire = (Fire) getPilotDataFromCode(code);
-
+				code = DEFAULT_FIRE_CODE;
 			}
 		}
+		if (blue) {
+			// Soul fire has no wall or ceiling variants, so it is used as-is wherever it is placed
+			return Material.SOUL_FIRE.createBlockData();
+		}
+		final BlockData data = getPilotDataFromCode(code);
+		final Fire fire = data instanceof Fire pilot ? pilot : (Fire) Material.FIRE.createBlockData();
 		if (isIgnitable(position) && position.getRelative(BlockFace.DOWN).getType().isSolid())
-			return (blue) ? Material.SOUL_FIRE.createBlockData() : fire; //Default fire for when there is a solid block bellow
+			return fire; //Default fire for when there is a solid block bellow
 
 		for (BlockFace face : IGNITE_FACES) {
 			fire.setFace(face, isIgnitable(position.getRelative(face).getType()));
@@ -187,16 +189,46 @@ public abstract class FireAbility extends ElementalAbility {
 		return fire;
 	}
 
+	private static final NamespacedKey ACTIVE_FIRE_COLORS = new NamespacedKey("tbmccore", "active_fire_colors");
+	private static final int DEFAULT_FIRE_CODE = 2;
+	private static final int BLUE_FIRE_CODE = 6;
+	private static final String PILOT_WORLD = "void";
+	private static final int PILOT_X = 901, PILOT_Y = 61, PILOT_Z = 930;
+	/** How long a pilot block read is reused before it is read again (if its chunk is loaded) */
+	private static final long PILOT_REFRESH_MILLIS = 5000;
+	private static final Map<Integer, PilotData> PILOT_CACHE = new ConcurrentHashMap<>();
 
+	private record PilotData(BlockData data, long readAt) {}
+
+	/**
+	 * Gets the fire data copied from the pilot block for a fire color code. Pilot blocks are cached and re-read every
+	 * few seconds. The pilot chunk is kept loaded with a plugin chunk ticket, so it is loaded at most once.
+	 * @param code The fire color code
+	 * @return A copy of the pilot block's data, or plain fire if the pilot block can't be read
+	 */
 	public static BlockData getPilotDataFromCode(int code) {
-		World world = Bukkit.getWorld("void");
-		int zCoord = 930-code;
-		Block block = world.getBlockAt(901, 61, zCoord);
-		return block.getBlockData();
-
+		final long now = System.currentTimeMillis();
+		PilotData cached = PILOT_CACHE.get(code);
+		if (cached == null || now - cached.readAt() > PILOT_REFRESH_MILLIS) {
+			final World world = Bukkit.getWorld(PILOT_WORLD);
+			final int zCoord = PILOT_Z - code;
+			if (world != null && !world.isChunkLoaded(PILOT_X >> 4, zCoord >> 4)) {
+				// Keep the pilot chunk loaded from now on, so it only has to be loaded once rather than mid-fight
+				world.addPluginChunkTicket(PILOT_X >> 4, zCoord >> 4, ProjectKorra.plugin);
+			}
+			if (world != null && world.isChunkLoaded(PILOT_X >> 4, zCoord >> 4)) {
+				final BlockData data = world.getBlockAt(PILOT_X, PILOT_Y, zCoord).getBlockData();
+				cached = new PilotData(data instanceof Fire ? data : null, now);
+				PILOT_CACHE.put(code, cached);
+			}
+		}
+		return cached != null && cached.data() != null ? cached.data().clone() : Material.FIRE.createBlockData();
 	}
 
 	public static void dryWetBlocks(final Block block, final CoreAbility ability, boolean playSound) {
+		if (block.getType() != Material.WET_SPONGE && !isSnow(block)) {
+			return; //Nothing to dry, so skip the region check
+		}
 		if (GeneralMethods.isRegionProtectedFromBuild(ability, block.getLocation())) {
 			return;
 		}

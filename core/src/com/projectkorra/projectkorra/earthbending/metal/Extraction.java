@@ -123,6 +123,9 @@ public class Extraction extends MetalAbility {
 			item = new ItemStack(Material.RAW_COPPER, this.getAmount(2));
 			break;
 		default:
+			// Not an ore and no iron golem targeted. Without this, every use on another block left an instance
+			// running until death or logout.
+			this.remove();
 			return;
 		}
 

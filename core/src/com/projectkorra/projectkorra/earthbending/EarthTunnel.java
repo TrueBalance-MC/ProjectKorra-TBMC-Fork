@@ -147,7 +147,8 @@ public class EarthTunnel extends EarthAbility {
 							}
 						}
 					} else {
-						if (this.dropLootIfNotRevert) {
+						// A TempBlock reverts to its original block later, so dropping it as loot would duplicate items
+						if (this.dropLootIfNotRevert && !TempBlock.isTempBlock(this.block)) {
 							this.block.breakNaturally();
 						} else {
 							this.block.setType(Material.AIR);
