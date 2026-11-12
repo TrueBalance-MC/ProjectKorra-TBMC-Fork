@@ -1,6 +1,7 @@
 name: ProjectKorra
 version: ${project.version}
 main: com.projectkorra.projectkorra.ProjectKorra
+bootstrapper: com.projectkorra.projectkorra.ProjectKorraBootstrap
 description: 'A plugin that brings Avatar: The Last Airbender to Minecraft'
 authors: [ProjectKorra]
 website: https://projectkorra.com/

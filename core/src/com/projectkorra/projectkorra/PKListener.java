@@ -503,6 +503,14 @@ public class PKListener implements Listener {
 		}
 	}
 
+	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+	public void onBendingThorns(final EntityDamageEvent event) {
+		// Thorns only reacts to attacks. Bending damage isn't one, so cancel any thorns it sets off on the bender.
+		if (event.getCause() == DamageCause.THORNS && DamageHandler.isDealingDamage(event.getEntity())) {
+			event.setCancelled(true);
+		}
+	}
+
 	@EventHandler(priority = EventPriority.NORMAL)
 	public void onEntityDamageEvent(final EntityDamageEvent event) {
 		final Entity entity = event.getEntity();

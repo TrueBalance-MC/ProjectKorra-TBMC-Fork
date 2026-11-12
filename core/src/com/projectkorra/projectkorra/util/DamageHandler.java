@@ -5,7 +5,6 @@ import com.projectkorra.projectkorra.ProjectKorra;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.damage.DamageSource;
-import org.bukkit.damage.DamageType;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -25,11 +24,13 @@ import org.jetbrains.annotations.NotNull;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 public class DamageHandler {
 
 	// Armor percentage
 	private static final HashMap<Integer, Double> ARMOR_PERCENTAGE_BY_ENTITY_ID = new HashMap<>();
+	private static final Set<UUID> DEALING_DAMAGE = new HashSet<>();
 	private static final String IGNORE_ARMOR_PREFIX = "Properties.IgnoreArmorPercentage.";
 	private static final Set<LivingEntity> BEING_DAMAGED = new HashSet<>();
 
@@ -140,6 +141,15 @@ public class DamageHandler {
 	}
 
 	/**
+	 * @param entity The entity to check
+	 * @return Whether the entity's bending damage is being dealt right now. Used to stop the target's Thorns hitting
+	 *         back, since bending isn't a melee attack.
+	 */
+	public static boolean isDealingDamage(final Entity entity) {
+		return DEALING_DAMAGE.contains(entity.getUniqueId());
+	}
+
+	/**
 	 * Damages an Entity by amount of damage specified. Starts a
 	 * {@link EntityDamageByEntityEvent}.
 	 *
@@ -202,17 +212,23 @@ public class DamageHandler {
 
 			// Sourceless damage (e.g. burning) isn't a hit from the bender, so it has no entities at all. Paper doesn't
 			// allow a causing entity without a direct one.
-			DamageSource.Builder damageSourceBuilder = DamageSource.builder(DamageType.GENERIC);
+			DamageSource.Builder damageSourceBuilder = DamageSource.builder(BendingDamage.getType());
 			if (!doSourcelessDamage) {
 				damageSourceBuilder = damageSourceBuilder.withCausingEntity(source).withDirectEntity(source);
 			}
 
 			final double prevHealth = lent.getHealth();
 			BEING_DAMAGED.add(lent); //Stops StackOverflows
+			if (source != null) {
+				DEALING_DAMAGE.add(source.getUniqueId()); //Thorns reflected while this runs is cancelled, see isDealingDamage
+			}
 			try {
 				lent.damage(damage, damageSourceBuilder.build());
 			} finally {
 				BEING_DAMAGED.remove(lent);
+				if (source != null) {
+					DEALING_DAMAGE.remove(source.getUniqueId());
+				}
 				// The damage event is handled synchronously inside damage(). If it was cancelled or never fired, the
 				// armor callback didn't run, so make sure the entity's next unrelated hit doesn't ignore armor
 				ARMOR_PERCENTAGE_BY_ENTITY_ID.remove(lent.getEntityId());
