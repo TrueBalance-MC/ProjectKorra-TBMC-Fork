@@ -44,6 +44,7 @@ public class WaterBubble extends WaterAbility {
 		super(player);
 
 		this.setFields();
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 
 		if (CoreAbility.hasAbility(player, this.getClass())) {
 			final WaterBubble bubble = CoreAbility.getAbility(player, this.getClass());

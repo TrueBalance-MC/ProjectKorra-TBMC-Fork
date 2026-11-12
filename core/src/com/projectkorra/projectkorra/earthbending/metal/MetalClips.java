@@ -48,6 +48,7 @@ public class MetalClips extends MetalAbility {
 	private boolean hasSnuck;
 	private int metalClipsCount;
 	private int abilityType;
+	@Attribute(Attribute.DURATION)
 	private int armorTime;
 	@Attribute("Magnet" + Attribute.RANGE)
 	private int magnetRange;

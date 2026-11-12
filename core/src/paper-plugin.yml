@@ -64,6 +64,10 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    DynamicTools:
+      load: BEFORE
+      required: false
+      join-classpath: true
 permissions:
   bending.admin:
     default: op

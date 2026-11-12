@@ -64,6 +64,7 @@ public class EarthArmor extends EarthAbility {
 		this.maxDuration = getConfig().getLong("Abilities.Earth.EarthArmor.MaxDuration");
 		this.selectRange = getConfig().getDouble("Abilities.Earth.EarthArmor.SelectRange");
 		this.maxGoldHearts = getConfig().getInt("Abilities.Earth.EarthArmor.GoldHearts");
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 
 		if (COLORS.isEmpty()) defineColors();
 

@@ -120,6 +120,7 @@ public class FlightMultiAbility extends FlightAbility implements MultiAbility {
 		this.duration = getConfig().getLong("Abilities.Air.Flight.Duration");
 		this.cooldown = getConfig().getLong("Abilities.Air.Flight.Cooldown");
 		this.baseSpeed = getConfig().getDouble("Abilities.Air.Flight.BaseSpeed");
+		this.recalculateAttributes(); // Apply attribute changes (e.g. jing) before the speeds are derived from the base speed
 
 		this.speed = 1;
 		this.slowSpeed = this.baseSpeed / 2;

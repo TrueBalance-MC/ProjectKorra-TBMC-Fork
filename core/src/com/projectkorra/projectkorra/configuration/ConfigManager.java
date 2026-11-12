@@ -787,6 +787,35 @@ public class ConfigManager {
 			config.addDefault("Properties.HorizontalCollisionPhysics.WallDamageMinimumDistance", 5.0);
 			config.addDefault("Properties.HorizontalCollisionPhysics.WallDamageCap", 5.0);
 
+			// Jing armor stats. Every effect value is the most it can reach as a fraction (0.2 = 20%). An effect
+			// reaches it at MaxJing jing and stops there. Exponent shapes the curve: 1 grows evenly, higher values give
+			// more for the first jing and less for each one after. General effects apply
+			// to every element equally; the Fire/Air/Chi/Earth entries only apply to that element. Water is anchored to
+			// the lowest jing, with jing above it counting ExcessWeight as much.
+			config.addDefault("Properties.Jing.Enabled", true);
+			config.addDefault("Properties.Jing.Curve.MaxJing", 120.0);
+			config.addDefault("Properties.Jing.Curve.Exponent", 1.5);
+			config.addDefault("Properties.Jing.MaxDamageReduction", 0.35);
+			config.addDefault("Properties.Jing.Water.AffinityMultiplier", 1.0);
+			config.addDefault("Properties.Jing.Water.ExcessWeight", 0.25);
+			config.addDefault("Properties.Jing.Positive.Damage", 0.20);
+			config.addDefault("Properties.Jing.Positive.ChargeTime", 0.25);
+			config.addDefault("Properties.Jing.Positive.Speed", 0.15);
+			config.addDefault("Properties.Jing.Positive.Fire.FireTicks", 0.40);
+			config.addDefault("Properties.Jing.Negative.Cooldown", 0.20);
+			config.addDefault("Properties.Jing.Negative.FallDamage", 0.40);
+			config.addDefault("Properties.Jing.Negative.GlancingBlow", 0.15);
+			config.addDefault("Properties.Jing.Negative.SelfPush", 0.15);
+			config.addDefault("Properties.Jing.Negative.Air.Duration", 0.25);
+			config.addDefault("Properties.Jing.Negative.Air.Height", 0.20);
+			config.addDefault("Properties.Jing.Negative.Chi.ChiBlockChance", 0.15);
+			config.addDefault("Properties.Jing.Neutral.DamageResistance", 0.20);
+			config.addDefault("Properties.Jing.Neutral.KnockbackResistance", 0.30);
+			config.addDefault("Properties.Jing.Neutral.Range", 0.15);
+			config.addDefault("Properties.Jing.Neutral.Earth.Duration", 0.25);
+			config.addDefault("Properties.Jing.Neutral.Earth.ChiBlockResistance", 0.40);
+			config.addDefault("Properties.Jing.Water.NightFactor", 0.25);
+
 			config.addDefault("Properties.RegionProtection.AllowHarmlessAbilities", true);
 			config.addDefault("Properties.RegionProtection.RespectWorldGuard", true);
 			config.addDefault("Properties.RegionProtection.RespectGriefDefender", true);

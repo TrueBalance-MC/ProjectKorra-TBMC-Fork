@@ -92,6 +92,7 @@ public class SurgeWave extends WaterAbility {
 		this.obsidianDuration = getConfig().getLong("Abilities.Water.Surge.Wave.SolidifyLava.Duration");
 		this.waveBlocks = new ConcurrentHashMap<>();
 		this.frozenBlocks = new ConcurrentHashMap<>();
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 
 		if (this.prepare()) {
 			wave = getAbility(player, SurgeWave.class);

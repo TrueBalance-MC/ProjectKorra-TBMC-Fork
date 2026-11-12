@@ -147,6 +147,7 @@ public class WaterArms extends WaterAbility {
 			return;
 		}
 
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 		if (this.bPlayer.canBend(this) && this.prepare()) {
 			this.start();
 			MultiAbilityManager.bindMultiAbility(player, "WaterArms");

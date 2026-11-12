@@ -15,6 +15,8 @@ import com.projectkorra.projectkorra.chiblocking.AcrobatStance;
 import com.projectkorra.projectkorra.chiblocking.QuickStrike;
 import com.projectkorra.projectkorra.chiblocking.SwiftKick;
 import com.projectkorra.projectkorra.configuration.ConfigManager;
+import com.projectkorra.projectkorra.jing.Jing;
+import com.projectkorra.projectkorra.jing.JingManager;
 
 public class ChiPassive {
 	public static boolean willChiBlock(final Player attacker, final Player player) {
@@ -37,6 +39,10 @@ public class ChiPassive {
 		} else if (swiftKick != null) {
 			newChance += swiftKick.getBlockChance();
 		}
+
+		// Negative jing helps chiblockers land blocks, neutral jing helps earthbenders resist them
+		newChance *= 1 + JingManager.getExclusiveBonus(attacker, Jing.NEGATIVE, "Negative.Chi.ChiBlockChance", Element.CHI);
+		newChance *= 1 - JingManager.getExclusiveBonus(player, Jing.NEUTRAL, "Neutral.Earth.ChiBlockResistance", Element.EARTH);
 
 		if (Math.random() > newChance / 100.0) {
 			return false;

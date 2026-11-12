@@ -40,6 +40,7 @@ public class Extraction extends MetalAbility {
 		this.selectRange = getConfig().getInt("Abilities.Earth.Extraction.SelectRange");
 		this.ironGolemDrops = getConfig().getInt("Abilities.Earth.Extraction.IronGolem.Drops");
 		this.ironGolemDamage = getConfig().getDouble("Abilities.Earth.Extraction.IronGolem.Damage");
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 
 		if (!this.bPlayer.canBend(this)) {
 			return;

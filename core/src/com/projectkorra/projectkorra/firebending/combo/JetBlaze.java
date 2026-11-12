@@ -1,5 +1,7 @@
 package com.projectkorra.projectkorra.firebending.combo;
 
+import com.projectkorra.projectkorra.jing.JingManager;
+import com.projectkorra.projectkorra.jing.Jing;
 import java.util.ArrayList;
 
 import com.projectkorra.projectkorra.ability.CoreAbility;
@@ -54,7 +56,8 @@ public class JetBlaze extends FireAbility implements ComboAbility {
 		this.cooldown = getConfig().getLong("Abilities.Fire.JetBlaze.Cooldown");
 		this.fireTicks = getConfig().getDouble("Abilities.Fire.JetBlaze.FireTicks");
 
-		this.fireJet.setSpeed(speed);
+		// The speed is handed to FireJet before start() recalculates it, so apply the jing speed bonus here
+		this.fireJet.setSpeed(speed * (1 + JingManager.getBonus(this, Jing.POSITIVE, "Positive.Speed")));
 		this.fireJet.setDuration(duration);
 		this.start();
 	}

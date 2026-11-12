@@ -1,5 +1,7 @@
 package com.projectkorra.projectkorra.firebending;
 
+import com.projectkorra.projectkorra.jing.JingManager;
+import com.projectkorra.projectkorra.jing.Jing;
 import com.projectkorra.projectkorra.attribute.markers.DayNightFactor;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
@@ -32,7 +34,8 @@ public class BlazeArc extends FireAbility {
 		super(player);
 		this.range = range;
 		this.speed = getConfig().getLong("Abilities.Fire.Blaze.Speed");
-		this.interval = (long) (1000.0 / this.speed);
+		// The interval is derived before start() recalculates the speed, so apply the jing speed bonus here
+		this.interval = (long) (1000.0 / (this.speed * (1 + JingManager.getBonus(this, Jing.POSITIVE, "Positive.Speed"))));
 
 		/*if(bPlayer.canUseSubElement(SubElement.BLUE_FIRE)) {
 			this.range += BlueFireAbility.getRangeFactor() * range - range;

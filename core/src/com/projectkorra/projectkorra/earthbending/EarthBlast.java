@@ -67,6 +67,7 @@ public class EarthBlast extends EarthAbility {
 		this.pushFactor = getConfig().getDouble("Abilities.Earth.EarthBlast.Push");
 		this.selectRange = getConfig().getDouble("Abilities.Earth.EarthBlast.SelectRange");
 		this.time = System.currentTimeMillis();
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 		this.interval = (long) (1000.0 / this.speed);
 
 		if (this.prepare()) {

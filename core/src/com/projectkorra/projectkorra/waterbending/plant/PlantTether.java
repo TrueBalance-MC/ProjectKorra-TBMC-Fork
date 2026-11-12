@@ -34,6 +34,7 @@ public class PlantTether extends PlantAbility {
 		}
 
 		this.setFields();
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 		this.currentState = State.INITIAL;
 		this.source = BlockSource.getWaterSourceBlock(this.player, this.selectRange, ClickType.SHIFT_DOWN, false, false, this.bPlayer.canPlantbend(), false, false);
 		if (this.source != null) {

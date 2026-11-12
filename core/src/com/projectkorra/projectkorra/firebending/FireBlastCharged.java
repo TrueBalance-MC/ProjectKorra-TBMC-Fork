@@ -48,6 +48,7 @@ public class FireBlastCharged extends FireAbility {
 	private double maxDamage;
 	@Attribute(Attribute.RANGE) @DayNightFactor
 	private double range;
+	@Attribute(Attribute.RADIUS)
 	private double collisionRadius;
 	@Attribute(Attribute.DAMAGE + Attribute.RADIUS) @DayNightFactor
 	private double damageRadius;

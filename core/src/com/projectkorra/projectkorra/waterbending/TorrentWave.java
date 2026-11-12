@@ -71,6 +71,7 @@ public class TorrentWave extends WaterAbility {
 		//this.knockback = this.getNightFactor(this.knockback);
 		//this.maxRadius = this.getNightFactor(this.maxRadius);
 
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 		this.initializeHeightsMap();
 		this.start();
 		this.bPlayer.addCooldown("TorrentWave", this.cooldown);

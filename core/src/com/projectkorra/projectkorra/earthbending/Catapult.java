@@ -20,6 +20,7 @@ import com.projectkorra.projectkorra.attribute.Attribute;
 
 public class Catapult extends EarthAbility {
 
+	@Attribute(Attribute.CHARGE_DURATION)
 	private double stageTimeMult;
 	@Attribute(Attribute.COOLDOWN)
 	private long cooldown;

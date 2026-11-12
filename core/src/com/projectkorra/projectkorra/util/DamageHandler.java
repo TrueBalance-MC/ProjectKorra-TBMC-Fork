@@ -200,10 +200,11 @@ public class DamageHandler {
 				}
 			}
 
-			DamageSource.Builder damageSourceBuilder = DamageSource.builder(DamageType.GENERIC)
-					.withCausingEntity(source);
+			// Sourceless damage (e.g. burning) isn't a hit from the bender, so it has no entities at all. Paper doesn't
+			// allow a causing entity without a direct one.
+			DamageSource.Builder damageSourceBuilder = DamageSource.builder(DamageType.GENERIC);
 			if (!doSourcelessDamage) {
-				damageSourceBuilder = damageSourceBuilder.withDirectEntity(source);
+				damageSourceBuilder = damageSourceBuilder.withCausingEntity(source).withDirectEntity(source);
 			}
 
 			final double prevHealth = lent.getHealth();

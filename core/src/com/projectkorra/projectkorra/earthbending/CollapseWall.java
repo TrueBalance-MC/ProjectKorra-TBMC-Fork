@@ -40,6 +40,7 @@ public class CollapseWall extends EarthAbility {
 		this.height = getConfig().getInt("Abilities.Earth.Collapse.Wall.Height");
 		this.radius = getConfig().getDouble("Abilities.Earth.Collapse.Radius");
 		this.cooldown = getConfig().getLong("Abilities.Earth.Collapse.Wall.Cooldown");
+		this.recalculateAttributes(); // Never started, so apply jing, night and AvatarState modifiers here
 		this.blocks = new ConcurrentHashMap<>();
 		this.baseBlocks = new ConcurrentHashMap<>();
 

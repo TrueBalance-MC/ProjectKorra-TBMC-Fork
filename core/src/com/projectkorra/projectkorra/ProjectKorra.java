@@ -31,6 +31,8 @@ import com.projectkorra.projectkorra.object.Preset;
 import com.projectkorra.projectkorra.storage.DBConnection;
 import com.projectkorra.projectkorra.util.Metrics;
 import com.projectkorra.projectkorra.util.RevertChecker;
+import com.projectkorra.projectkorra.jing.JingListener;
+import com.projectkorra.projectkorra.jing.JingManager;
 import com.projectkorra.projectkorra.util.StatisticsManager;
 import com.projectkorra.projectkorra.util.Updater;
 import com.projectkorra.projectkorra.waterbending.util.WaterbendingManager;
@@ -77,6 +79,8 @@ public class ProjectKorra extends JavaPlugin {
 		BendingPlayer.DISABLED_WORLDS = new HashSet<>(ConfigManager.defaultConfig.get().getStringList("Properties.DisabledWorlds"));
 
 		this.getServer().getPluginManager().registerEvents(new PKListener(), this);
+		this.getServer().getPluginManager().registerEvents(new JingListener(), this);
+		JingManager.loadAll();
 		this.getServer().getScheduler().scheduleSyncRepeatingTask(this, new BendingManager(), 0, 1);
 		this.getServer().getScheduler().scheduleSyncRepeatingTask(this, new AirbendingManager(this), 0, 1);
 		this.getServer().getScheduler().scheduleSyncRepeatingTask(this, new WaterbendingManager(this), 0, 1);

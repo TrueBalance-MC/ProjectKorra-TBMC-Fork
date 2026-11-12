@@ -41,6 +41,7 @@ public class Collapse extends EarthAbility {
 			return;
 		}
 
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 		this.block = BlockSource.getEarthSourceBlock(player, this.selectRange, ClickType.LEFT_CLICK);
 		if (this.block == null) {
 			return;

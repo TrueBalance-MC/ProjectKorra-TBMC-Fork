@@ -44,6 +44,7 @@ public class AirSweep extends AirAbility implements ComboAbility {
 	private Vector direction;
 	private ArrayList<Entity> affectedEntities;
 	private ArrayList<BukkitRunnable> tasks;
+	@Attribute(Attribute.RADIUS)
 	private double radius;
 
 	public AirSweep(final Player player) {

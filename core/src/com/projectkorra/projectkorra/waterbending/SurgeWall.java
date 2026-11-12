@@ -79,6 +79,7 @@ public class SurgeWall extends WaterAbility {
 		this.solidifyLava = getConfig().getBoolean("Abilities.Water.Surge.Wall.SolidifyLava.Enabled");
 		this.obsidianDuration = getConfig().getLong("Abilities.Water.Surge.Wall.SolidifyLava.Duration");
 		this.locations = new ArrayList<>();
+		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 
 		SurgeWave wave = getAbility(player, SurgeWave.class);
 		if (wave != null && !wave.isProgressing() && !this.bPlayer.isOnCooldown("SurgeWave")) {

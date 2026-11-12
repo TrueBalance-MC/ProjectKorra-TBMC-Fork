@@ -399,7 +399,7 @@ public class EarthSmash extends EarthAbility {
 				final List<Entity> entities = GeneralMethods.getEntitiesAroundPoint(this.location, this.liftRange);
 				for (final Entity entity : entities) {
 					final org.bukkit.util.Vector velocity = entity.getVelocity();
-					entity.setVelocity(velocity.add(new Vector(0, this.liftKnockup, 0)));
+					GeneralMethods.setVelocity(this, entity, velocity.add(new Vector(0, this.liftKnockup, 0)));
 				}
 			}
 
