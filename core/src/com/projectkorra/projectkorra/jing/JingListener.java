@@ -27,12 +27,14 @@ import org.bukkit.event.player.PlayerQuitEvent;
 /**
  * Applies jing bonuses to bending:
  * <ul>
- *     <li>Positive: more ability damage, faster charging and projectiles. Fire: longer burns.</li>
+ *     <li>Positive: more ability damage, faster charging and projectiles. Fire: longer burns. Chi: higher chiblock
+ *     chance, more strikes and thrown daggers.</li>
  *     <li>Negative: shorter cooldowns, less fall damage, glancing blows while moving, stronger self-propulsion.
- *     Air: longer and higher abilities. Chi: higher chiblock chance.</li>
+ *     Air: longer and higher abilities. Chi: longer abilities.</li>
  *     <li>Neutral: less ability damage and knockback taken, longer select range and radius. Earth: longer
  *     abilities and chiblock resistance.</li>
- *     <li>Water: all of the above, anchored to the lowest jing, plus a stronger night bonus.</li>
+ *     <li>Water: longer durations, bigger projectiles and areas, more projectiles or uses, and a stronger night
+ *     bonus, all from the lowest jing.</li>
  * </ul>
  * Ability attributes are changed through {@link AbilityRecalculateAttributeEvent}, so they work for any addon
  * ability that marks its fields with {@link Attribute}. Damage, cooldowns and knockback use the events fired by
@@ -48,6 +50,11 @@ public class JingListener implements Listener {
 	private static final NamespacedKey DURATION = key("duration");
 	private static final NamespacedKey HEIGHT = key("height");
 	private static final NamespacedKey NIGHT_FACTOR = key("night_factor");
+	private static final NamespacedKey WATER_DURATION = key("water_duration");
+	private static final NamespacedKey WATER_SIZE = key("water_size");
+	private static final NamespacedKey WATER_COUNT = key("water_count");
+	private static final NamespacedKey CHI_DURATION = key("chi_duration");
+	private static final NamespacedKey CHI_COUNT = key("chi_count");
 
 	private static NamespacedKey key(final String name) {
 		return new NamespacedKey(ProjectKorra.plugin, "jing_" + name);
@@ -83,7 +90,12 @@ public class JingListener implements Listener {
 		}
 		final Element group = JingManager.getGroup(ability.getElement());
 
-		switch (classify(event.getAttribute())) {
+		String attribute = classify(event.getAttribute());
+		if (group == Element.CHI && (attribute.endsWith("Hits") || attribute.endsWith("Shots"))) {
+			attribute = Attribute.COUNT; // Strikes and thrown projectiles, e.g. RapidPunch's hits and DaggerThrow's daggers
+		}
+
+		switch (attribute) {
 			case Attribute.CHARGE_DURATION ->reduce(event, JingManager.getBonus(ability, Jing.POSITIVE, "Positive.ChargeTime"), CHARGE_TIME);
 			case Attribute.SPEED -> increase(event, JingManager.getBonus(ability, Jing.POSITIVE, "Positive.Speed"), SPEED);
 			case Attribute.FIRE_TICK -> {
@@ -92,17 +104,41 @@ public class JingListener implements Listener {
 				}
 			}
 			case Attribute.SELF_PUSH -> increase(event, JingManager.getBonus(ability, Jing.NEGATIVE, "Negative.SelfPush"), SELF_PUSH);
-			case Attribute.SELECT_RANGE, Attribute.RADIUS -> increase(event, JingManager.getBonus(ability, Jing.NEUTRAL, "Neutral.Range"), RANGE);
+			case Attribute.SELECT_RANGE -> increase(event, JingManager.getBonus(ability, Jing.NEUTRAL, "Neutral.Range"), RANGE);
+			case Attribute.RADIUS -> {
+				increase(event, JingManager.getBonus(ability, Jing.NEUTRAL, "Neutral.Range"), RANGE);
+				if (group == Element.WATER) {
+					increase(event, waterBonus(player, "Water.Size"), WATER_SIZE);
+				}
+			}
+			case Attribute.WIDTH -> {
+				if (group == Element.WATER) {
+					increase(event, waterBonus(player, "Water.Size"), WATER_SIZE);
+				}
+			}
 			case Attribute.DURATION -> {
 				if (group == Element.AIR) {
 					increase(event, JingManager.getBonus(ability, Jing.NEGATIVE, "Negative.Air.Duration"), DURATION);
-				} else if (group == Element.EARTH || group == Element.WATER) {
+				} else if (group == Element.EARTH) {
 					increase(event, JingManager.getBonus(ability, Jing.NEUTRAL, "Neutral.Earth.Duration"), DURATION);
+				} else if (group == Element.WATER) {
+					increase(event, waterBonus(player, "Water.Duration"), WATER_DURATION);
+				} else if (group == Element.CHI) {
+					increase(event, JingManager.getExclusiveBonus(player, Jing.NEGATIVE, "Negative.Chi.Duration", Element.CHI), CHI_DURATION);
 				}
 			}
 			case Attribute.HEIGHT -> {
 				if (group == Element.AIR) {
 					increase(event, JingManager.getBonus(ability, Jing.NEGATIVE, "Negative.Air.Height"), HEIGHT);
+				} else if (group == Element.WATER) {
+					increase(event, waterBonus(player, "Water.Size"), WATER_SIZE);
+				}
+			}
+			case Attribute.COUNT -> {
+				if (group == Element.WATER) {
+					increase(event, waterBonus(player, "Water.Count"), WATER_COUNT);
+				} else if (group == Element.CHI) {
+					increase(event, JingManager.getExclusiveBonus(player, Jing.POSITIVE, "Positive.Chi.StrikeCount", Element.CHI), CHI_COUNT);
 				}
 			}
 			default -> {}
@@ -111,7 +147,7 @@ public class JingListener implements Listener {
 		// Water's own bonus: balanced jing strengthens the night factor
 		if (group == Element.WATER && event.hasMarker(DayNightFactor.class) && WaterAbility.isNight(player.getWorld())
 				&& player.hasPermission("bending.water.nightfactor")) {
-			final double bonus = JingManager.getExclusiveBonus(player, Jing.NEUTRAL, "Water.NightFactor", Element.WATER);
+			final double bonus = waterBonus(player, "Water.NightFactor");
 			if (bonus > 0) {
 				if (event.getMarker(DayNightFactor.class).invert()) {
 					reduce(event, 1 - 1 / (1 + bonus), NIGHT_FACTOR);
@@ -128,11 +164,18 @@ public class JingListener implements Listener {
 	 * @param attribute The attribute name
 	 * @return The base attribute, or the name unchanged if it isn't one jing affects
 	 */
+	/**
+	 * Water's own bonuses use the bender's lowest jing, so they reward balanced armor
+	 */
+	private static double waterBonus(final Player player, final String configPath) {
+		return JingManager.getExclusiveBonus(player, Jing.NEUTRAL, configPath, Element.WATER);
+	}
+
 	private static String classify(final String attribute) {
 		if (attribute.endsWith(Attribute.CHARGE_DURATION) || attribute.endsWith("ChargeDuration")) {
 			return Attribute.CHARGE_DURATION; // Checked first so "ChargeDuration" gets shorter, not longer
 		}
-		for (final String base : new String[] { Attribute.SELECT_RANGE, Attribute.SELF_PUSH, Attribute.FIRE_TICK, Attribute.RADIUS, Attribute.DURATION, Attribute.HEIGHT, Attribute.SPEED }) {
+		for (final String base : new String[] { Attribute.SELECT_RANGE, Attribute.SELF_PUSH, Attribute.FIRE_TICK, Attribute.RADIUS, Attribute.WIDTH, Attribute.DURATION, Attribute.HEIGHT, Attribute.COUNT, Attribute.SPEED }) {
 			if (attribute.endsWith(base)) {
 				return base;
 			}
@@ -141,7 +184,16 @@ public class JingListener implements Listener {
 	}
 
 	private static void increase(final AbilityRecalculateAttributeEvent event, final double bonus, final NamespacedKey key) {
-		if (bonus > 0 && event.getOriginalValue() instanceof Number) {
+		if (bonus <= 0 || !(event.getOriginalValue() instanceof Number original)) {
+			return;
+		}
+		if (original instanceof Integer || original instanceof Long) {
+			// Whole numbers like projectile counts would be cut off by multiplying, e.g. 3 * 1.3 = 3, so round instead
+			final long extra = Math.round(original.doubleValue() * bonus);
+			if (extra > 0) {
+				event.addModification(AttributeModification.of(AttributeModifier.ADDITION, original instanceof Integer ? (Number) (int) extra : (Number) extra, key));
+			}
+		} else {
 			event.addModification(AttributeModification.of(AttributeModifier.MULTIPLICATION, 1 + bonus, key));
 		}
 	}
@@ -159,10 +211,11 @@ public class JingListener implements Listener {
 		}
 		double damage = event.getDamage();
 
-		// The attacker's positive jing adds damage
+		// The attacker's positive jing adds damage. It's added to the event's bonuses so it stacks additively with
+		// damage bonuses from other plugins
 		final Player source = event.getSource();
 		if (source != null && event.getAbility() instanceof CoreAbility ability) {
-			damage *= 1 + JingManager.getBonus(source, Jing.POSITIVE, "Positive.Damage", ability.getElement());
+			event.addDamageBonus(JingManager.getBonus(source, Jing.POSITIVE, "Positive.Damage", ability.getElement()));
 		}
 
 		// The target's neutral jing resists it, and negative jing turns it into a glancing blow while they're moving

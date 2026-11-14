@@ -26,4 +26,6 @@ public @interface Attribute {
 	public static final String SELF_PUSH = "SelfPush";
 	public static final String FIRE_TICK = "FireTicks";
 	public static final String AVATAR_STATE_TOGGLE = "AvatarStateToggle";
+	/** How many of something an ability makes or allows, e.g. projectiles or uses. Name variants end with it, e.g. "ShotCount". */
+	public static final String COUNT = "Count";
 }

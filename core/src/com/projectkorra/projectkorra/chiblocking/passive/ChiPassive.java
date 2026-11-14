@@ -40,8 +40,8 @@ public class ChiPassive {
 			newChance += swiftKick.getBlockChance();
 		}
 
-		// Negative jing helps chiblockers land blocks, neutral jing helps earthbenders resist them
-		newChance *= 1 + JingManager.getExclusiveBonus(attacker, Jing.NEGATIVE, "Negative.Chi.ChiBlockChance", Element.CHI);
+		// Positive jing adds to a chiblocker's chance (once, as percentage points), neutral jing helps earthbenders resist it
+		newChance += 100 * JingManager.getExclusiveBonus(attacker, Jing.POSITIVE, "Positive.Chi.ChiBlockChance", Element.CHI);
 		newChance *= 1 - JingManager.getExclusiveBonus(player, Jing.NEUTRAL, "Neutral.Earth.ChiBlockResistance", Element.EARTH);
 
 		if (Math.random() > newChance / 100.0) {

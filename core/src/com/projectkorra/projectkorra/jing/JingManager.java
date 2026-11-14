@@ -19,10 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * its configured maximum at {@code maxJing} jing and stops there, so no amount of jing gets out of hand. An exponent of
  * 1 grows evenly; higher exponents give more for the first jing and less for each one after.
  * <p>
- * The general bonuses apply equally to every element. Each jing also unlocks extra effects for the element it
- * complements (positive for fire, negative for air and chi, neutral for earth), see {@link #getExclusiveBonus}.
- * Water uses all three, anchored to the player's lowest jing: the lowest value counts fully for every jing, while
- * anything above it only counts partly. A balanced set is best for water.
+ * The general bonuses apply equally to every element. Each element also gets its own extra effects, see
+ * {@link #getExclusiveBonus}: positive jing for fire, negative for air and chi, neutral for earth. Water's extra
+ * effects use the player's lowest jing, so a balanced set is best for water.
  */
 public final class JingManager {
 
@@ -89,11 +88,6 @@ public final class JingManager {
 		if (stats.isEmpty()) {
 			return 0;
 		}
-		if (getGroup(element) == Element.WATER) {
-			final double lowest = stats.lowest();
-			final double points = lowest + (stats.get(jing) - lowest) * getConfig("Water.ExcessWeight");
-			return curve(points, getConfig(configPath)) * getConfig("Water.AffinityMultiplier");
-		}
 		return curve(stats.get(jing), getConfig(configPath));
 	}
 
@@ -117,16 +111,7 @@ public final class JingManager {
 	 * @return The bonus as a fraction
 	 */
 	public static double getBestBonus(final Player player, final Jing jing, final String configPath) {
-		final BendingPlayer bPlayer = BendingPlayer.getBendingPlayer(player);
-		if (bPlayer == null || bPlayer.getElements().isEmpty()) {
-			return getBonus(player, jing, configPath, null);
-		}
-		// Waterbenders are anchored to their lowest jing; anyone with another element as well gets the better of the two
-		double best = 0;
-		for (final Element element : bPlayer.getElements()) {
-			best = Math.max(best, getBonus(player, jing, configPath, element));
-		}
-		return best;
+		return getBonus(player, jing, configPath, null); // General bonuses are the same for every element
 	}
 
 	/**
@@ -147,7 +132,12 @@ public final class JingManager {
 			return 0;
 		}
 		final JingStats stats = getStats(player);
-		return curve(element == Element.WATER ? stats.lowest() : stats.get(jing), getConfig(configPath));
+		final double max = getConfig(configPath);
+		if (element == Element.WATER) {
+			// Water uses the lowest of the three jings, which rarely gets high, so it's boosted but never past the max
+			return Math.min(max, curve(stats.lowest(), max) * getConfig("Water.LowestJingMultiplier"));
+		}
+		return curve(stats.get(jing), max);
 	}
 
 	/**

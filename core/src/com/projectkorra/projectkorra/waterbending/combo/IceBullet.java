@@ -60,6 +60,10 @@ public class IceBullet extends IceAbility implements ComboAbility {
 	private double shots;
 	@Attribute("MaxShots")
 	private double maxShots;
+	/** Extra shots from water's jing. Kept apart from MaxShots so AvatarState configs for MaxShots still apply. */
+	@Attribute("Shot" + Attribute.COUNT)
+	private int shotCount;
+	private int baseShotCount;
 	private double animationSpeed;
 	@Attribute(Attribute.COOLDOWN) @DayNightFactor(invert = true)
 	private long cooldown;
@@ -94,6 +98,7 @@ public class IceBullet extends IceAbility implements ComboAbility {
 		this.shotcooldown = getConfig().getLong("Abilities.Water.IceBullet.ShotCooldown");
 		this.shootTime = getConfig().getLong("Abilities.Water.IceBullet.ShootTime");
 		this.maxShots = getConfig().getInt("Abilities.Water.IceBullet.MaxShots");
+		this.shotCount = this.baseShotCount = (int) this.maxShots;
 		this.animationSpeed = getConfig().getDouble("Abilities.Water.IceBullet.AnimationSpeed");
 		this.speed = 1;
 
@@ -262,7 +267,7 @@ public class IceBullet extends IceAbility implements ComboAbility {
 			return;
 		}
 
-		if (this.shots > this.maxShots || !this.player.isSneaking()) {
+		if (this.shots > this.maxShots + this.shotCount - this.baseShotCount || !this.player.isSneaking()) {
 			this.remove();
 			return;
 		}

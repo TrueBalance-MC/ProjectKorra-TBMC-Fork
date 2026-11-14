@@ -190,7 +190,7 @@ public class DamageHandler {
 		
 		if (entity instanceof LivingEntity && !damageEvent.isCancelled()) {
 			LivingEntity lent = (LivingEntity) entity;
-			damage = Math.max(0, damageEvent.getDamage());
+			damage = damageEvent.getFinalDamage();
 
 			if (lent.getHealth() - damage <= 0 && !entity.isDead()) {
 				final EntityBendingDeathEvent event = new EntityBendingDeathEvent(entity, damage, ability);

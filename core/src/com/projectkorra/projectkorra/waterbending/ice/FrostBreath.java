@@ -56,6 +56,7 @@ public class FrostBreath extends IceAbility implements SubAbility {
     /* Snow tempblocks config */
     private boolean snow;
     private boolean bendableSnow;
+    @Attribute("Snow" + Attribute.DURATION)
     private long snowDuration;
 
     /* Non-config variables */

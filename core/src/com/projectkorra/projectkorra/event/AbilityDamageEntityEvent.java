@@ -22,6 +22,7 @@ public class AbilityDamageEntityEvent extends Event implements Cancellable {
 	private final Entity entity;
 	private final Ability ability;
 	private double damage;
+	private double damageBonus = 0;
 	private final boolean ignoreArmor;
 
 	/**
@@ -54,6 +55,33 @@ public class AbilityDamageEntityEvent extends Event implements Cancellable {
 	 */
 	public void setDamage(final double damage) {
 		this.damage = damage;
+	}
+
+	/**
+	 * Adds a percentage bonus to the damage, e.g. 0.1 for 10% more damage (negative values reduce it). Bonuses from
+	 * every source (Positive Jing, other plugins' buffs, etc.) are added together and applied once, so they stack
+	 * additively instead of multiplying each other: a 30% and a 10% bonus give 40% more damage, not 43%.
+	 * This is the way to add a damage bonus, use {@link #setDamage(double)} only for changes that should apply
+	 * before the bonuses.
+	 *
+	 * @param bonus the bonus as a fraction of the damage
+	 */
+	public void addDamageBonus(final double bonus) {
+		this.damageBonus += bonus;
+	}
+
+	/**
+	 * @return the total of every bonus added with {@link #addDamageBonus(double)}
+	 */
+	public double getDamageBonus() {
+		return this.damageBonus;
+	}
+
+	/**
+	 * @return the damage that will be dealt: {@link #getDamage()} with the bonuses applied, never below 0
+	 */
+	public double getFinalDamage() {
+		return Math.max(0, this.damage * (1 + this.damageBonus));
 	}
 
 	/**

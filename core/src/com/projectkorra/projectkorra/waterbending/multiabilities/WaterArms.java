@@ -59,6 +59,14 @@ public class WaterArms extends WaterAbility {
 	private int maxIceBlasts;
 	@Attribute("MaxUses") @DayNightFactor
 	private int maxUses;
+	/** Extra punches, ice blasts and uses from water's jing. Kept apart so AvatarState configs for the Max fields still apply. */
+	@Attribute("Punch" + Attribute.COUNT)
+	private int punchCount;
+	@Attribute("IceBlast" + Attribute.COUNT)
+	private int iceBlastCount;
+	@Attribute("Use" + Attribute.COUNT)
+	private int useCount;
+	private int basePunchCount, baseIceBlastCount, baseUseCount;
 	private int selectedSlot;
 	private int freezeSlot;
 	@Attribute(Attribute.COOLDOWN) @DayNightFactor(invert = true)
@@ -86,6 +94,9 @@ public class WaterArms extends WaterAbility {
 		this.maxPunches = getConfig().getInt("Abilities.Water.WaterArms.Arms.MaxAttacks");
 		this.maxIceBlasts = getConfig().getInt("Abilities.Water.WaterArms.Arms.MaxIceShots");
 		this.maxUses = getConfig().getInt("Abilities.Water.WaterArms.Arms.MaxAlternateUsage");
+		this.punchCount = this.basePunchCount = this.maxPunches;
+		this.iceBlastCount = this.baseIceBlastCount = this.maxIceBlasts;
+		this.useCount = this.baseUseCount = this.maxUses;
 		this.cooldown = getConfig().getLong("Abilities.Water.WaterArms.Arms.Cooldown");
 		this.lightningDamage = getConfig().getDouble("Abilities.Water.WaterArms.Arms.Lightning.Damage");
 		this.sneakMsg = ConfigManager.languageConfig.get().getString("Abilities.Water.WaterArms.SneakMessage");
@@ -150,6 +161,10 @@ public class WaterArms extends WaterAbility {
 		this.recalculateAttributes(); // Apply jing, night and AvatarState modifiers before they are used below
 		if (this.bPlayer.canBend(this) && this.prepare()) {
 			this.start();
+			// These are spent as the arms are used, so add water's jing extras once now that attributes are calculated
+			this.maxPunches += this.punchCount - this.basePunchCount;
+			this.maxIceBlasts += this.iceBlastCount - this.baseIceBlastCount;
+			this.maxUses += this.useCount - this.baseUseCount;
 			MultiAbilityManager.bindMultiAbility(player, "WaterArms");
 
 			if (ChatUtil.stripColor(this.bPlayer.getBoundAbilityName()) == null) {

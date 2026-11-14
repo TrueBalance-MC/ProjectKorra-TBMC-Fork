@@ -29,6 +29,10 @@ public class IceSpikePillarField extends IceAbility {
 	private double radius;
 	@Attribute("NumberOfSpikes")
 	private int numberOfSpikes;
+	/** Extra spikes from water's jing. Kept apart so AvatarState configs for NumberOfSpikes still apply. */
+	@Attribute("Spike" + Attribute.COUNT)
+	private int spikeCount;
+	private int baseSpikeCount;
 	@Attribute(Attribute.COOLDOWN) @DayNightFactor(invert = true)
 	private long cooldown;
 	@Attribute(Attribute.KNOCKUP) @DayNightFactor
@@ -47,6 +51,7 @@ public class IceSpikePillarField extends IceAbility {
 		this.knockup = getConfig().getDouble("Abilities.Water.IceSpike.Field.Knockup");
 
 		this.numberOfSpikes = (int) (((this.radius) * (this.radius)) / 4);
+		this.spikeCount = this.baseSpikeCount = this.numberOfSpikes;
 
 		this.recalculateAttributes();
 
@@ -88,7 +93,8 @@ public class IceSpikePillarField extends IceAbility {
 		int pillars;
 
 		final List<Entity> entities = GeneralMethods.getEntitiesAroundPoint(this.player.getLocation(), this.radius);
-		for (pillars = 0; pillars < this.numberOfSpikes; pillars++) {
+		final int spikes = this.numberOfSpikes + this.spikeCount - this.baseSpikeCount;
+		for (pillars = 0; pillars < spikes; pillars++) {
 			if (iceBlocks.isEmpty()) {
 				break;
 			}

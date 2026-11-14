@@ -285,6 +285,16 @@ permissions:
       bending.ability.Flight.Glide: true
       bending.ability.Flight.Levitate: true
       bending.ability.Flight.Ending: true
+  bending.ability.WaterArms:
+    default: false
+    description: Grants access to WaterArms and all of its sub-abilities.
+    children:
+      bending.ability.WaterArms.Pull: true
+      bending.ability.WaterArms.Punch: true
+      bending.ability.WaterArms.Grapple: true
+      bending.ability.WaterArms.Grab: true
+      bending.ability.WaterArms.Freeze: true
+      bending.ability.WaterArms.Spear: true
   bending.ability.WaterCombo:
     default: false
     description: Grants access to all WaterCombos.
